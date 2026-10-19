@@ -6,14 +6,17 @@ a non-dry run appends to the Doc and creates a Gmail draft. Emails are only actu
 sent through the dedicated publish endpoint, which requires an explicit ``confirm_send``.
 """
 
+import hmac
 import os
 import re
 from collections import Counter, defaultdict
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from pulse import ui_service
@@ -48,6 +51,23 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_token(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """When PULSE_API_TOKEN is set, every /api call except health needs a matching X-Pulse-Token."""
+    token = os.environ.get("PULSE_API_TOKEN")
+    path = request.url.path
+    guarded = request.method != "OPTIONS" and path.startswith("/api") and path != "/api/health"
+    if (
+        token
+        and guarded
+        and not hmac.compare_digest(request.headers.get("x-pulse-token", ""), token)
+    ):
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 def _read_only() -> bool:

@@ -2,5 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd web && npm ci",
   "buildCommand": "cd web && npm run build",
-  "outputDirectory": "web/dist"
+  "outputDirectory": "web/dist",
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api/proxy?path=:path*" }],
+  "functions": { "api/proxy.js": { "maxDuration": 60 } }
 }
