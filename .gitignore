@@ -43,3 +43,4 @@ Thumbs.db
 # --- Web UI ---
 web/node_modules/
 web/dist/
+web/.vite/

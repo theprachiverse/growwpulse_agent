@@ -11,10 +11,13 @@ RUN uv sync --frozen --no-dev --extra web --extra streamlit
 COPY config ./config
 COPY .streamlit ./.streamlit
 COPY streamlit_app.py ./
+COPY deploy_data ./deploy_data
+COPY scripts/railway_start.sh ./railway_start.sh
+RUN chmod +x railway_start.sh
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PULSE_DATA_DIR=/data \
     PYTHONUNBUFFERED=1
 
 # Railway injects $PORT; mount the Volume at /data.
-CMD ["sh", "-c", "streamlit run streamlit_app.py --server.port ${PORT:-8501} --server.address 0.0.0.0 --server.headless true"]
+CMD ["./railway_start.sh"]
