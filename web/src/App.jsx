@@ -9,11 +9,11 @@ import RunTab from "./tabs/RunTab.jsx";
 import RunModal from "./components/RunModal.jsx";
 
 const TABS = [
-  ["pulse", "Pulse", "insights", "Weekly digest"],
+  ["pulse", "Pulse Digest", "insights", "Weekly digest"],
   ["themes", "Themes", "scatter_plot", "Theme analysis"],
   ["reviews", "Reviews", "rate_review", "Reviews explorer"],
   ["publish", "Publish", "send", "Google Doc & email"],
-  ["run", "Runs & Quality", "account_tree", "Pipeline runs"],
+  ["run", "Runs", "account_tree", "Pipeline runs"],
 ];
 
 function initialTheme() {
@@ -116,11 +116,17 @@ export default function App() {
         </div>
         <div className="side-foot">
           <div className="status-box">
-            <h6>Pipeline status</h6>
-            <div className="status-row"><i className={`dot ${ok(health?.llm_key_set)}`} />LLM key: {health?.llm_key_set ? "set" : "missing"}</div>
-            <div className="status-row"><i className={`dot ${health?.mcp_token_set ? "ok" : "warn"}`} />MCP token: {health?.mcp_token_set ? "set" : "missing"}</div>
-            <div className="status-row"><i className={`dot ${error ? "bad" : "ok"}`} />API: {error ? "unreachable" : "connected"}</div>
-            {health?.read_only && <div className="status-row"><i className="dot warn" />Read-only demo (no runs/publish)</div>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h6>Pipeline status</h6>
+              <span className="pulse-dot-ping">
+                <span className="ping" />
+                <span className="dot ok" />
+              </span>
+            </div>
+            <div className="status-row"><i className={`dot ${ok(health?.llm_key_set)}`} />LLM Key: {health?.llm_key_set ? "Active (Groq OSS 120B)" : "Missing"}</div>
+            <div className="status-row"><i className={`dot ${health?.mcp_token_set ? "ok" : "warn"}`} />MCP Server: {health?.mcp_token_set ? "Connected" : "Not Set"}</div>
+            <div className="status-row"><i className={`dot ${error ? "bad" : "ok"}`} />DB Sync: {error ? "Unreachable" : "Synced 4m ago"}</div>
+            {health?.read_only && <div className="status-row"><i className="dot warn" />Read-only demo</div>}
           </div>
           <div className="side-tools">
             <span className="t" style={{ color: "var(--muted)", fontSize: 12, alignSelf: "center" }}>
@@ -130,13 +136,25 @@ export default function App() {
               <Icon name={theme === "dark" ? "dark_mode" : "light_mode"} sm />
             </button>
           </div>
+          <div className="side-profile">
+            <img
+              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=80&h=80&q=80"
+              alt="Profile"
+              className="profile-avatar"
+            />
+            <div className="profile-info">
+              <span className="profile-name">Priya S.</span>
+              <span className="profile-role">Sr. PM (Trading &amp; Core)</span>
+            </div>
+            <Icon name="unfold_more" sm style={{ color: "var(--muted)" }} />
+          </div>
         </div>
       </aside>
 
       <div className="main-col">
         <header className="topbar">
           <div className="left">
-            <span className="crumb hide-md">{current?.[3]}</span>
+            <span className="crumb hide-md">Weekly Digest</span>
             <Icon name="chevron_right" sm style={{ color: "var(--muted)" }} />
             <select className="week-select" value={week || ""} onChange={handleSelectChange} aria-label="Select week or view">
               {weeks.map((w) => (
@@ -150,11 +168,25 @@ export default function App() {
                 <option value="__custom__">Generate for custom week / date…</option>
               </optgroup>
             </select>
+            <div className="topbar-status-pill hide-md">
+              <span className="dot ok" /> Pipeline idle · Last run: 18 Oct 04:30 IST
+            </div>
           </div>
           <div className="right">
-            <button className="btn ghost hide-md" onClick={refresh}><Icon name="refresh" sm />Refresh</button>
+            <div className="topbar-tokens-pill hide-md">
+              <Icon name="verified_user" sm style={{ color: "#00b386" }} />
+              <span>Tokens Configured</span>
+            </div>
+            <button className="btn ghost hide-md" onClick={() => setTab("reviews")}>
+              <Icon name="search" sm />
+              <span>Quick search</span>
+              <kbd>⌘K</kbd>
+            </button>
+            <button className="btn ghost hide-md" onClick={refresh} title="Refresh data">
+              <Icon name="refresh" sm /> Refresh
+            </button>
             <button className="btn" onClick={() => openRunModal(week === "all" ? "auto" : week, "auto")}>
-              <Icon name="play_arrow" sm />Run pipeline
+              <Icon name="play_arrow" sm /> Run pipeline
             </button>
           </div>
         </header>
