@@ -136,18 +136,6 @@ export default function App() {
               <Icon name={theme === "dark" ? "dark_mode" : "light_mode"} sm />
             </button>
           </div>
-          <div className="side-profile">
-            <img
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=80&h=80&q=80"
-              alt="Profile"
-              className="profile-avatar"
-            />
-            <div className="profile-info">
-              <span className="profile-name">Priya S.</span>
-              <span className="profile-role">Sr. PM (Trading &amp; Core)</span>
-            </div>
-            <Icon name="unfold_more" sm style={{ color: "var(--muted)" }} />
-          </div>
         </div>
       </aside>
 
