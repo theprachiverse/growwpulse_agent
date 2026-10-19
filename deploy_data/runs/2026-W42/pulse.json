@@ -1,0 +1,107 @@
+{
+  "week": "2026-W42",
+  "window_start": "2026-08-10",
+  "window_end": "2026-10-18",
+  "total_reviews": 1527,
+  "reviews_by_source": {
+    "play_store": 1388,
+    "app_store": 139
+  },
+  "avg_rating_by_source": {
+    "play_store": 2.89,
+    "app_store": 3.38
+  },
+  "avg_rating": 2.93,
+  "top_themes": [
+    {
+      "theme_id": "t3",
+      "name": "App Stability & Performance",
+      "definition": "Technical glitches, freezing, crashing, and biometric login problems.",
+      "review_count": 546,
+      "share": 0.3576,
+      "avg_rating": 2.95,
+      "low_rating_share": 0.4634,
+      "wow_delta": null,
+      "by_source": {
+        "play_store": 491,
+        "app_store": 55
+      }
+    },
+    {
+      "theme_id": "t1",
+      "name": "Trading & F&O Execution",
+      "definition": "Issues related to orders, stop loss execution, charts, and trading lags.",
+      "review_count": 467,
+      "share": 0.3058,
+      "avg_rating": 3.02,
+      "low_rating_share": 0.4497,
+      "wow_delta": null,
+      "by_source": {
+        "play_store": 426,
+        "app_store": 41
+      }
+    },
+    {
+      "theme_id": "t2",
+      "name": "Customer Support & Escalation",
+      "definition": "Difficulty reaching human support, AI bot loops, and ticket resolution.",
+      "review_count": 116,
+      "share": 0.076,
+      "avg_rating": 1.8,
+      "low_rating_share": 0.7759,
+      "wow_delta": null,
+      "by_source": {
+        "play_store": 106,
+        "app_store": 10
+      }
+    }
+  ],
+  "quotes": [
+    {
+      "rid": "rid_580fecc685",
+      "source": "app_store",
+      "theme_id": "t3",
+      "text": "Customer care guys not supporting properly don’t use this app anymore Worst experience from groww",
+      "rating": 1,
+      "month": "Sep 2026"
+    },
+    {
+      "rid": "rid_de75cb98ed",
+      "source": "play_store",
+      "theme_id": "t1",
+      "text": "Overall a Good experience, it's has improved alot now. But should add \"Return Value - Total & Days change\" just as it's available in Moneycontrol portfolio section alongwith %change. thanks",
+      "rating": 3,
+      "month": "Aug 2026"
+    },
+    {
+      "rid": "rid_05e8d66e48",
+      "source": "play_store",
+      "theme_id": "t2",
+      "text": "Worst customer care service, no reply for last few of my complaints till now",
+      "rating": 1,
+      "month": "Sep 2026"
+    }
+  ],
+  "actions": [
+    {
+      "title": "Biometric Session Renewal & Keep-Alive",
+      "rationale": "Implement non-blocking biometric re-auth and background session keep-alive to eliminate crashes during app switching.",
+      "theme_id": "t3",
+      "owner_hint": "Engineering"
+    },
+    {
+      "title": "Stop-Loss Order Pre-Validation & Chart Sync",
+      "rationale": "Introduce order pre-validation checks and sync TradingView indicators to prevent order rejection panics during peak volume.",
+      "theme_id": "t1",
+      "owner_hint": "Product"
+    },
+    {
+      "title": "AI Chatbot Human-Handoff Fast-Track",
+      "rationale": "Introduce a 2-prompt loop detection threshold in the support bot to route users directly to human executives.",
+      "theme_id": "t2",
+      "owner_hint": "Support"
+    }
+  ],
+  "markdown": "# Groww App Reviews Pulse — 2026-W42\n*Window: 2026-08-10 to 2026-10-18 (10 weeks) · Play Store: 1,388 reviews (2.89★) · App Store: 139 reviews (3.38★) [Coverage: partial (W36–W42)]*\n\n## Top Themes\n1. **App Stability & Performance** — 35.8% of reviews, 46.3% are 1–2★ (Play: 491, iOS: 55). Technical glitches, freezing, crashing, and biometric login problems.\n2. **Trading & F&O Execution** — 30.6% of reviews, 45.0% are 1–2★ (Play: 426, iOS: 41). Issues related to orders, stop loss execution, charts, and trading lags.\n3. **Customer Support & Escalation** — 7.6% of reviews, 77.6% are 1–2★ (Play: 106, iOS: 10). Difficulty reaching human support, AI bot loops, and ticket resolution.\n\n## What Users Said\n> \"Customer care guys not supporting properly don’t use this app anymore Worst experience from groww\" — 1★, App Store, Sep 2026\n> \"Overall a Good experience, it's has improved alot now. But should add \"Return Value - Total & Days change\" just as it's available in Moneycontrol portfolio section alongwith %change. thanks\" — 3★, Play Store, Aug 2026\n> \"Worst customer care service, no reply for last few of my complaints till now\" — 1★, Play Store, Sep 2026\n\n## Action Ideas\n1. **Biometric Session Renewal & Keep-Alive** — Implement non-blocking biometric re-auth and background session keep-alive to eliminate crashes during app switching. (Engineering, App Stability & Performance)\n2. **Stop-Loss Order Pre-Validation & Chart Sync** — Introduce order pre-validation checks and sync TradingView indicators to prevent order rejection panics during peak volume. (Product, Trading & F&O Execution)\n3. **AI Chatbot Human-Handoff Fast-Track** — Introduce a 2-prompt loop detection threshold in the support bot to route users directly to human executives. (Support, Customer Support & Escalation)\n",
+  "word_count": 250
+}

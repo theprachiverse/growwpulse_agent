@@ -1,0 +1,43 @@
+{
+  "run_id": "run_2026-W42_1792424518",
+  "week": "2026-W42",
+  "started_at": "2026-10-19T15:41:58.611568Z",
+  "finished_at": "2026-10-19T15:41:58.720390Z",
+  "status": "success",
+  "counts": {},
+  "coverage_start": {},
+  "source_errors": {},
+  "llm_usage": {
+    "tokens_prompt": 0,
+    "tokens_completion": 0,
+    "tokens_total": 0,
+    "llm_calls": 0,
+    "estimated_cost_usd_micros": 0
+  },
+  "doc_id": null,
+  "doc_url": null,
+  "draft_id": null,
+  "publish": {
+    "week": "2026-W42",
+    "doc_id": null,
+    "doc_url": null,
+    "doc_append": {
+      "status": "pending",
+      "request_id": null,
+      "at": null,
+      "error": null,
+      "content_sha256": null
+    },
+    "email": {
+      "status": "pending",
+      "request_id": null,
+      "at": null,
+      "error": null,
+      "mode": null,
+      "draft_id": null,
+      "message_id": null,
+      "thread_id": null
+    }
+  },
+  "eval_summary": {}
+}

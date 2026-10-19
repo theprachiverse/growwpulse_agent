@@ -1,0 +1,22 @@
+# MCP server registry. The server owns Google OAuth: this repo never sees Google tokens.
+# Server source: https://github.com/theprachiverse/mcp_server
+# Secrets (the bearer token) come from the environment, never from this file.
+
+servers:
+  google_workspace:
+    transport: streamable_http
+    url: https://mcpserver-production-da04.up.railway.app/mcp   # override with MCP_SERVER_URL
+    auth_token_env: MCP_AUTH_TOKEN
+    tool_map:
+      docs_create: google_docs_create
+      docs_append: google_docs_append_text
+      email_draft: gmail_create_draft
+      email_send: gmail_send_email
+
+# Safety: nothing outside this list is ever called. gmail_send_email is additionally
+# gated in code: it is only reachable when the effective email mode is "send".
+tool_allowlist:
+  - google_docs_create
+  - google_docs_append_text
+  - gmail_create_draft
+  - gmail_send_email

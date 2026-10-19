@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "hard_failures": [],
+  "soft_warnings": [],
+  "checks": {
+    "theme_count": true,
+    "quote_count": true,
+    "verbatim": true,
+    "pii": true,
+    "word_limit": true,
+    "action_grounding": true,
+    "no_identifiers": true,
+    "source_attribution": true,
+    "source_coverage": true,
+    "tone": true
+  },
+  "word_count": 250,
+  "max_words_allowed": 250,
+  "validated_at": "2026-10-17T18:59:18.041626+00:00"
+}

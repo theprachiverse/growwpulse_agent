@@ -1,0 +1,58 @@
+[
+  {
+    "theme_id": "t3",
+    "name": "App Stability & Performance",
+    "definition": "Technical glitches, freezing, crashing, and biometric login problems.",
+    "review_count": 546,
+    "share": 0.3576,
+    "avg_rating": 2.95,
+    "low_rating_share": 0.4634,
+    "wow_delta": null,
+    "by_source": {
+      "play_store": 491,
+      "app_store": 55
+    }
+  },
+  {
+    "theme_id": "t1",
+    "name": "Trading & F&O Execution",
+    "definition": "Issues related to orders, stop loss execution, charts, and trading lags.",
+    "review_count": 467,
+    "share": 0.3058,
+    "avg_rating": 3.02,
+    "low_rating_share": 0.4497,
+    "wow_delta": null,
+    "by_source": {
+      "play_store": 426,
+      "app_store": 41
+    }
+  },
+  {
+    "theme_id": "t2",
+    "name": "Customer Support & Escalation",
+    "definition": "Difficulty reaching human support, AI bot loops, and ticket resolution.",
+    "review_count": 116,
+    "share": 0.076,
+    "avg_rating": 1.8,
+    "low_rating_share": 0.7759,
+    "wow_delta": null,
+    "by_source": {
+      "play_store": 106,
+      "app_store": 10
+    }
+  },
+  {
+    "theme_id": "t4",
+    "name": "Charges & Fee Transparency",
+    "definition": "Hidden fees, unexpected brokerage deductions, and pricing confusion.",
+    "review_count": 73,
+    "share": 0.0478,
+    "avg_rating": 2.55,
+    "low_rating_share": 0.5753,
+    "wow_delta": null,
+    "by_source": {
+      "play_store": 68,
+      "app_store": 5
+    }
+  }
+]

@@ -1,0 +1,55 @@
+{"id": "A001", "tier": "A", "category": "PHONE", "text": "My problem is not solved yet, contact details are +91 98765 43210.", "values": ["+91 98765 43210"], "expected_types": ["PHONE"]}
+{"id": "A002", "tier": "A", "category": "PHONE", "text": "+91 98765 43210 is what I gave support but they still did not reply to my complaint.", "values": ["+91 98765 43210"], "expected_types": ["PHONE"]}
+{"id": "A003", "tier": "A", "category": "PHONE", "text": "Mera issue solve nahi hua, number 09876543210 hai, please call back jaldi.", "values": ["09876543210"], "expected_types": ["PHONE"]}
+{"id": "A004", "tier": "A", "category": "PHONE", "text": "Please call 09876543210 and fix my pending withdrawal, nobody responds in the app.", "values": ["09876543210"], "expected_types": ["PHONE"]}
+{"id": "A005", "tier": "A", "category": "PHONE", "text": "Please call (9876543210) and fix my pending withdrawal, nobody responds in the app.", "values": ["(9876543210)"], "expected_types": ["PHONE"]}
+{"id": "A006", "tier": "A", "category": "PHONE", "text": "After the update the app keeps crashing; reach me on (9876543210)", "values": ["(9876543210)"], "expected_types": ["PHONE"]}
+{"id": "A007", "tier": "A", "category": "PHONE", "text": "My problem is not solved yet, contact details are 98765-43210.", "values": ["98765-43210"], "expected_types": ["PHONE"]}
+{"id": "A008", "tier": "A", "category": "PHONE", "text": "Please call 98765-43210 and fix my pending withdrawal, nobody responds in the app.", "values": ["98765-43210"], "expected_types": ["PHONE"]}
+{"id": "A009", "tier": "A", "category": "PHONE", "text": "After the update the app keeps crashing; reach me on +919876543210", "values": ["+919876543210"], "expected_types": ["PHONE"]}
+{"id": "A010", "tier": "A", "category": "PHONE", "text": "+919876543210 is what I gave support but they still did not reply to my complaint.", "values": ["+919876543210"], "expected_types": ["PHONE"]}
+{"id": "A011", "tier": "A", "category": "PAN", "text": "Please call ABCDE1234F and fix my pending withdrawal, nobody responds in the app.", "values": ["ABCDE1234F"], "expected_types": ["PAN"]}
+{"id": "A012", "tier": "A", "category": "PAN", "text": "After the update the app keeps crashing; reach me on ABCDE1234F", "values": ["ABCDE1234F"], "expected_types": ["PAN"]}
+{"id": "A013", "tier": "A", "category": "PAN", "text": "Mera issue solve nahi hua, number abcde1234f hai, please call back jaldi.", "values": ["abcde1234f"], "expected_types": ["PAN"]}
+{"id": "A014", "tier": "A", "category": "PAN", "text": "After the update the app keeps crashing; reach me on abcde1234f", "values": ["abcde1234f"], "expected_types": ["PAN"]}
+{"id": "A015", "tier": "A", "category": "PAN", "text": "Please call PQRSX9876L and fix my pending withdrawal, nobody responds in the app.", "values": ["PQRSX9876L"], "expected_types": ["PAN"]}
+{"id": "A016", "tier": "A", "category": "PAN", "text": "PQRSX9876L is what I gave support but they still did not reply to my complaint.", "values": ["PQRSX9876L"], "expected_types": ["PAN"]}
+{"id": "A017", "tier": "A", "category": "AADHAAR", "text": "Please call 1234 5678 9012 and fix my pending withdrawal, nobody responds in the app.", "values": ["1234 5678 9012"], "expected_types": ["AADHAAR"]}
+{"id": "A018", "tier": "A", "category": "AADHAAR", "text": "Mera issue solve nahi hua, number 1234 5678 9012 hai, please call back jaldi.", "values": ["1234 5678 9012"], "expected_types": ["AADHAAR"]}
+{"id": "A019", "tier": "A", "category": "AADHAAR", "text": "Please call 1234-5678-9012 and fix my pending withdrawal, nobody responds in the app.", "values": ["1234-5678-9012"], "expected_types": ["AADHAAR"]}
+{"id": "A020", "tier": "A", "category": "AADHAAR", "text": "After the update the app keeps crashing; reach me on 1234-5678-9012", "values": ["1234-5678-9012"], "expected_types": ["AADHAAR"]}
+{"id": "A021", "tier": "A", "category": "AADHAAR", "text": "987654321098 is what I gave support but they still did not reply to my complaint.", "values": ["987654321098"], "expected_types": ["AADHAAR"]}
+{"id": "A022", "tier": "A", "category": "AADHAAR", "text": "Please call 987654321098 and fix my pending withdrawal, nobody responds in the app.", "values": ["987654321098"], "expected_types": ["AADHAAR"]}
+{"id": "A023", "tier": "A", "category": "EMAIL", "text": "After the update the app keeps crashing; reach me on a.b+groww@gmail.com", "values": ["a.b+groww@gmail.com"], "expected_types": ["EMAIL"]}
+{"id": "A024", "tier": "A", "category": "EMAIL", "text": "Mera issue solve nahi hua, number a.b+groww@gmail.com hai, please call back jaldi.", "values": ["a.b+groww@gmail.com"], "expected_types": ["EMAIL"]}
+{"id": "A025", "tier": "A", "category": "EMAIL", "text": "Please call rahul.sharma92@yahoo.co.in and fix my pending withdrawal, nobody responds in the app.", "values": ["rahul.sharma92@yahoo.co.in"], "expected_types": ["EMAIL"]}
+{"id": "A026", "tier": "A", "category": "EMAIL", "text": "rahul.sharma92@yahoo.co.in is what I gave support but they still did not reply to my complaint.", "values": ["rahul.sharma92@yahoo.co.in"], "expected_types": ["EMAIL"]}
+{"id": "A027", "tier": "A", "category": "EMAIL", "text": "Please call support_help@outlook.com and fix my pending withdrawal, nobody responds in the app.", "values": ["support_help@outlook.com"], "expected_types": ["EMAIL"]}
+{"id": "A028", "tier": "A", "category": "EMAIL", "text": "support_help@outlook.com is what I gave support but they still did not reply to my complaint.", "values": ["support_help@outlook.com"], "expected_types": ["EMAIL"]}
+{"id": "A029", "tier": "A", "category": "UPI", "text": "My problem is not solved yet, contact details are rahul@okaxis.", "values": ["rahul@okaxis"], "expected_types": ["UPI"]}
+{"id": "A030", "tier": "A", "category": "UPI", "text": "Mera issue solve nahi hua, number rahul@okaxis hai, please call back jaldi.", "values": ["rahul@okaxis"], "expected_types": ["UPI"]}
+{"id": "A031", "tier": "A", "category": "UPI", "text": "9876543210@ybl is what I gave support but they still did not reply to my complaint.", "values": ["9876543210@ybl"], "expected_types": ["UPI"]}
+{"id": "A032", "tier": "A", "category": "UPI", "text": "Please call 9876543210@ybl and fix my pending withdrawal, nobody responds in the app.", "values": ["9876543210@ybl"], "expected_types": ["UPI"]}
+{"id": "A033", "tier": "A", "category": "UPI", "text": "After the update the app keeps crashing; reach me on priya.k@paytm", "values": ["priya.k@paytm"], "expected_types": ["UPI"]}
+{"id": "A034", "tier": "A", "category": "UPI", "text": "My problem is not solved yet, contact details are priya.k@paytm.", "values": ["priya.k@paytm"], "expected_types": ["UPI"]}
+{"id": "A035", "tier": "A", "category": "IFSC", "text": "After the update the app keeps crashing; reach me on HDFC0001234", "values": ["HDFC0001234"], "expected_types": ["IFSC"]}
+{"id": "A036", "tier": "A", "category": "IFSC", "text": "HDFC0001234 is what I gave support but they still did not reply to my complaint.", "values": ["HDFC0001234"], "expected_types": ["IFSC"]}
+{"id": "A037", "tier": "A", "category": "IFSC", "text": "Please call SBIN0004567 and fix my pending withdrawal, nobody responds in the app.", "values": ["SBIN0004567"], "expected_types": ["IFSC"]}
+{"id": "A038", "tier": "A", "category": "IFSC", "text": "SBIN0004567 is what I gave support but they still did not reply to my complaint.", "values": ["SBIN0004567"], "expected_types": ["IFSC"]}
+{"id": "A039", "tier": "A", "category": "IFSC", "text": "My problem is not solved yet, contact details are ICIC0000123.", "values": ["ICIC0000123"], "expected_types": ["IFSC"]}
+{"id": "A040", "tier": "A", "category": "IFSC", "text": "Please call ICIC0000123 and fix my pending withdrawal, nobody responds in the app.", "values": ["ICIC0000123"], "expected_types": ["IFSC"]}
+{"id": "A041", "tier": "A", "category": "ACCOUNT_NUMBER", "text": "After the update the app keeps crashing; reach me on 1208160012345678", "values": ["1208160012345678"], "expected_types": ["ACCOUNT_NUMBER"]}
+{"id": "A042", "tier": "A", "category": "ACCOUNT_NUMBER", "text": "Please call 1208160012345678 and fix my pending withdrawal, nobody responds in the app.", "values": ["1208160012345678"], "expected_types": ["ACCOUNT_NUMBER"]}
+{"id": "A043", "tier": "A", "category": "ACCOUNT_NUMBER", "text": "After the update the app keeps crashing; reach me on 50100123456789", "values": ["50100123456789"], "expected_types": ["ACCOUNT_NUMBER"]}
+{"id": "A044", "tier": "A", "category": "ACCOUNT_NUMBER", "text": "Please call 50100123456789 and fix my pending withdrawal, nobody responds in the app.", "values": ["50100123456789"], "expected_types": ["ACCOUNT_NUMBER"]}
+{"id": "A045", "tier": "A", "category": "URL", "text": "After the update the app keeps crashing; reach me on https://wa.me/919876543210", "values": ["https://wa.me/919876543210"], "expected_types": ["URL"]}
+{"id": "A046", "tier": "A", "category": "URL", "text": "https://wa.me/919876543210 is what I gave support but they still did not reply to my complaint.", "values": ["https://wa.me/919876543210"], "expected_types": ["URL"]}
+{"id": "A047", "tier": "A", "category": "URL", "text": "Mera issue solve nahi hua, number http://example.com/refer?id=abc123 hai, please call back jaldi.", "values": ["http://example.com/refer?id=abc123"], "expected_types": ["URL"]}
+{"id": "A048", "tier": "A", "category": "URL", "text": "After the update the app keeps crashing; reach me on http://example.com/refer?id=abc123", "values": ["http://example.com/refer?id=abc123"], "expected_types": ["URL"]}
+{"id": "A049", "tier": "A", "category": "ID", "text": "My problem is not solved yet, contact details are GRW2410AB93XZ.", "values": ["GRW2410AB93XZ"], "expected_types": ["ID"]}
+{"id": "A050", "tier": "A", "category": "ID", "text": "Mera issue solve nahi hua, number GRW2410AB93XZ hai, please call back jaldi.", "values": ["GRW2410AB93XZ"], "expected_types": ["ID"]}
+{"id": "A900", "tier": "A", "category": "PHONE", "text": "call me on 98765​43210 about my withdrawal please", "values": ["9876543210"], "expected_types": ["PHONE"]}
+{"id": "B001", "tier": "B", "category": "PERSON", "text": "my name is Rahul Sharma and my withdrawal is stuck", "values": ["Rahul Sharma"], "expected_types": ["PERSON"]}
+{"id": "B002", "tier": "B", "category": "PERSON", "text": "agent Priya Nair was rude on the call", "values": ["Priya Nair"], "expected_types": ["PERSON"]}
+{"id": "B003", "tier": "B", "category": "OBFUSCATED_DIGITS", "text": "my number is 9 8 7 6 5 4 3 2 1 0 call me", "values": ["9 8 7 6 5 4 3 2 1 0"], "expected_types": ["OBFUSCATED_DIGITS"]}
+{"id": "B004", "tier": "B", "category": "OBFUSCATED_DIGITS", "text": "nine eight seven six five four three two one zero is my phone", "values": ["nine eight seven six five four three two one zero"], "expected_types": ["OBFUSCATED_DIGITS"]}

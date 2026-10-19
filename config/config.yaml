@@ -1,0 +1,68 @@
+# Behaviour config for the Groww Weekly Review Pulse.
+# Secrets live in `.env`, never here. Validated by `pulse.config.AppConfig`.
+
+sources:
+  play_store:
+    enabled: true
+    package_id: com.nextbillion.groww
+    country: in
+    lang: en
+    max_reviews: 10000        # increased to 10,000 for deep 8-12 week coverage
+    page_size: 200
+  app_store:
+    enabled: true
+    app_id: "1404871703"
+    country: in
+    max_pages: 10             # Apple RSS limit (~50 reviews/page, ~500 total)
+    max_reviews: 500
+    accumulate_weekly: true   # build the window from stored weekly snapshots
+
+ingest:
+  window_weeks: 10            # allowed: 8..12
+  min_reviews: 50             # fewer clean reviews => low-volume banner
+  skip_on_low_volume: false   # true = abort instead of banner
+  min_words: 8                # keep only reviews with more than 8 words (> 8)
+  english_only: true          # keep only English reviews (drop other languages)
+  strip_emojis: true          # remove emojis from review text
+
+privacy:
+  enable_presidio: false      # true = also scrub person names (install presidio + en_core_web_lg)
+
+ranking:
+  source_weighting: volume    # volume | balanced
+
+theming:
+  max_themes: 5               # hard cap: <= 5
+  top_k: 3
+  batch_size: 50              # reviews per classification batch (e.g. 10, 25, 50)
+  seed_taxonomy:
+    - onboarding
+    - kyc
+    - payments_upi
+    - withdrawals
+    - statements
+    - app_performance
+    - trading_fno
+    - customer_support
+    - charges
+
+compose:
+  max_words: 250              # hard cap: <= 250
+  target_words: 220           # shorten down to this so small edits don't breach the cap
+  quote_words: [8, 40]
+
+llm:
+  model_chat: openai/gpt-oss-120b  # Groq
+  model_embed: sentence-transformers/all-MiniLM-L6-v2  # local
+  base_url: https://api.groq.com/openai/v1
+  timeout_s: 60
+  max_retries: 6
+  temperature:
+    classify: 0.0
+    compose: 0.4
+
+publish:
+  email_mode: draft          # draft (default, nothing is sent) | send | off
+  email_format: html         # html (styled) | text (plain fallback)
+  auto_create_doc: true      # create the Doc via MCP on first publish if PULSE_DOC_ID is unset
+  doc_title: "Groww Weekly Review Pulse"

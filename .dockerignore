@@ -1,0 +1,12 @@
+.git
+.venv
+data
+web
+evals
+tests
+Docs
+stitch_groww_review_pulse_dashboard
+.env
+.env.*
+__pycache__
+*.pyc

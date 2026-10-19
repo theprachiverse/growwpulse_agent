@@ -1,0 +1,17 @@
+# Groww App Reviews Pulse — {{ week }}
+*Window: {{ window_start }} to {{ window_end }} ({{ window_weeks }} weeks) · Play Store: {{ "{:,}".format(play_count) }} reviews ({{ "%.2f"|format(play_avg) }}★) · App Store: {{ "{:,}".format(app_count) }} reviews ({{ "%.2f"|format(app_avg) }}★){% if partial_coverage %} [Coverage: partial ({{ partial_coverage }})]{% endif %}{% if low_volume %} [Low volume: {{ total_reviews }} reviews, treat trends with caution]{% endif %}*
+
+## Top Themes
+{% for theme in top_themes %}
+{{ loop.index }}. **{{ theme.name }}** — {{ "%.1f"|format(theme.share * 100) }}% of reviews{% if theme.wow_delta is not none %} ({{ "%+.1f"|format(theme.wow_delta) }} pts WoW){% endif %}, {{ "%.1f"|format(theme.low_rating_share * 100) }}% are 1–2★ (Play: {{ theme.by_source.get('play_store', 0) }}, iOS: {{ theme.by_source.get('app_store', 0) }}). {{ theme.definition }}
+{% endfor %}
+
+## What Users Said
+{% for quote in quotes %}
+> "{{ quote.text }}" — {{ quote.rating }}★, {{ "Play Store" if quote.source == "play_store" else "App Store" }}, {{ quote.month }}
+{% endfor %}
+
+## Action Ideas
+{% for action in actions %}
+{{ loop.index }}. **{{ action.title }}** — {{ action.rationale }} ({{ action.owner_hint }}, {{ theme_name_by_id[action.theme_id] }})
+{% endfor %}

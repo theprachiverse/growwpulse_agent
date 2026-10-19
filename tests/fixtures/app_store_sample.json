@@ -1,0 +1,102 @@
+[
+  {
+    "source": "app_store",
+    "review_id": "as_1048201",
+    "rating": 5,
+    "title": "Clean interface for mutual funds",
+    "text": "Best app for direct mutual fund investments and SIP tracking. Very smooth UI.",
+    "date": "2026-10-13T07:29:22-07:00",
+    "app_version": "18.20.0",
+    "helpful_votes": 3
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048202",
+    "rating": 1,
+    "title": "Frequent logout and PIN issues",
+    "text": "Every time I open the app after updating on iOS, it asks for OTP verification. Fix this biometric login bug.",
+    "date": "2026-10-11T14:15:00-07:00",
+    "app_version": "18.20.0",
+    "helpful_votes": 7
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048203",
+    "rating": 4,
+    "title": "Good app but need better F&O charts",
+    "text": "Trading view charts sometimes lag during market open hours. Otherwise options chain is very easy to use.",
+    "date": "2026-10-09T09:30:12-07:00",
+    "app_version": "18.19.1",
+    "helpful_votes": 2
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048204",
+    "rating": 2,
+    "title": "Withdrawal delay to bank",
+    "text": "Placed withdrawal on Monday morning but balance credited only after 48 hours. Support chat was unhelpful.",
+    "date": "2026-10-05T18:45:20-07:00",
+    "app_version": "18.19.0",
+    "helpful_votes": 5
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048205",
+    "rating": 5,
+    "title": "Super easy for beginners",
+    "text": "Started my investing journey with Groww. Very transparent charges and no hidden fees.",
+    "date": "2026-09-28T11:22:15-07:00",
+    "app_version": "18.18.2",
+    "helpful_votes": 1
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048206",
+    "rating": 1,
+    "title": "KYC re-verification stuck",
+    "text": "Re-KYC pending since last two weeks, account is frozen and I cannot execute SIP orders. Please resolve.",
+    "date": "2026-09-22T16:05:40-07:00",
+    "app_version": "18.18.0",
+    "helpful_votes": 8
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048207",
+    "rating": 5,
+    "title": "Fast UPI mandates",
+    "text": "UPI mandate setup for autopay SIP is instantaneous. Love the dashboard simplicity.",
+    "date": "2026-09-17T08:12:33-07:00",
+    "app_version": "18.17.1",
+    "helpful_votes": 0
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048208",
+    "rating": 3,
+    "title": "Need dark mode on iPad",
+    "text": "Good on iPhone, but iPad layout needs work and dark mode toggle is missing in profile settings.",
+    "date": "2026-09-12T13:40:50-07:00",
+    "app_version": "18.17.0",
+    "helpful_votes": 2
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048209",
+    "rating": 4,
+    "title": "Great mutual funds tracking",
+    "text": "External mutual funds import through CAS is a great feature. Please add XIRR calculation for all folios.",
+    "date": "2026-09-06T10:19:05-07:00",
+    "app_version": "18.16.2",
+    "helpful_votes": 4
+  },
+  {
+    "source": "app_store",
+    "review_id": "as_1048210",
+    "rating": 2,
+    "title": "Order execution freeze during expiry",
+    "text": "App got stuck on Thursday expiry around 2:30 PM. Couldn't exit my position and incurred loss.",
+    "date": "2026-09-01T20:53:09-07:00",
+    "app_version": "18.16.0",
+    "helpful_votes": 12
+  }
+]

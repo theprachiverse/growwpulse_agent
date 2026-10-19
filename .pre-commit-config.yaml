@@ -1,0 +1,38 @@
+# Install once with:  uv run pre-commit install
+# Hooks run through the project's uv environment so versions match pyproject.toml.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+        exclude: ^(uv.lock|deploy_data/.*)$
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: ruff-lint
+        name: ruff (lint)
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: no-env-file
+        name: block committing .env
+        entry: .env files must not be committed
+        language: fail
+        files: '(^|/)\.env$'

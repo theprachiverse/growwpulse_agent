@@ -1,0 +1,15 @@
+.venv
+data
+web/node_modules
+web/dist
+tests
+evals
+Docs
+stitch_groww_review_pulse_dashboard
+.streamlit
+streamlit_app.py
+Dockerfile
+railway.json
+scripts
+.env
+.env.*
