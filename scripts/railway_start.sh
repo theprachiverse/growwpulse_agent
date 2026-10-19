@@ -11,4 +11,4 @@ fi
 if [ "${PULSE_SCHEDULE_ENABLED:-0}" = "1" ]; then
   python -m pulse.scheduler &
 fi
-exec streamlit run streamlit_app.py --server.port "${PORT:-8501}" --server.address 0.0.0.0 --server.headless true
+exec uvicorn pulse.api:app --host 0.0.0.0 --port "${PORT:-8000}"

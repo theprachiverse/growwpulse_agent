@@ -34,10 +34,17 @@ logger = get_logger("pulse.api")
 WEEK_RE = re.compile(r"^\d{4}-W\d{2}$")
 STEPS = ("ingest", "preprocess", "theming", "compose", "publish")
 
+
+def _cors_origins() -> list[str]:
+    """Extra allowed origins (the Vercel frontend), comma-separated in PULSE_CORS_ORIGINS."""
+    raw = os.environ.get("PULSE_CORS_ORIGINS", "")
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+
 app = FastAPI(title="Groww Review Pulse", version="1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # same-origin when deployed
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", *_cors_origins()],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )

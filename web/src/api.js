@@ -1,5 +1,8 @@
+// Empty in local dev (Vite proxies /api); on Vercel set VITE_API_BASE to the Railway API URL.
+const BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+
 async function req(path, opts) {
-  const r = await fetch(path, opts);
+  const r = await fetch(BASE + path, opts);
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch { /* keep statusText */ }

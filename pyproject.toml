@@ -24,8 +24,6 @@ dependencies = [
 embeddings = ["sentence-transformers>=3.0"]
 # Local web UI (pulse serve)
 web = ["fastapi>=0.115", "uvicorn>=0.30"]
-# Streamlit dashboard (streamlit_app.py); reuses the API module's read helpers, so needs web too
-streamlit = ["streamlit>=1.42", "fastapi>=0.115"]
 
 [project.scripts]
 pulse = "pulse.cli:app"

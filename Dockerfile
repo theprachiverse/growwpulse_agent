@@ -6,11 +6,9 @@ WORKDIR /app
 # Dependencies first for layer caching. No 'embeddings' extra (pulls torch).
 COPY pyproject.toml uv.lock ./
 COPY src ./src
-RUN uv sync --frozen --no-dev --extra web --extra streamlit
+RUN uv sync --frozen --no-dev --extra web
 
 COPY config ./config
-COPY .streamlit ./.streamlit
-COPY streamlit_app.py ./
 COPY deploy_data ./deploy_data
 COPY scripts/railway_start.sh ./railway_start.sh
 RUN chmod +x railway_start.sh

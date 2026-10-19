@@ -1,7 +1,7 @@
-"""UI-facing services shared by the FastAPI app and the Streamlit app.
+"""UI-facing services used by the FastAPI app.
 
 Holds the dashboard-saved settings (recipients, Doc override), the single background
-pipeline job, and the Doc/email publish action, so both front ends behave identically.
+pipeline job, and the Doc/email publish action, for the web dashboard.
 """
 
 from __future__ import annotations

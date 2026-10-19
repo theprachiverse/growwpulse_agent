@@ -44,3 +44,4 @@ Thumbs.db
 web/node_modules/
 web/dist/
 web/.vite/
+web/*.timestamp-*.mjs

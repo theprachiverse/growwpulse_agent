@@ -1,6 +1,6 @@
 """Weekly scheduler for the always-on cloud container (Railway).
 
-Runs as its own process next to Streamlit (see scripts/railway_start.sh). Every hour it checks
+Runs as its own process next to the API (see scripts/railway_start.sh). Every hour it checks
 whether it is Monday at/after PULSE_SCHEDULE_HOUR_UTC (default 03:30 UTC = 09:00 IST) and the last
 completed week has no successful run yet; if so it runs the pipeline. The orchestrator's per-week
 file lock keeps this safe if a run is started from the dashboard at the same time.
