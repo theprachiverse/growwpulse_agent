@@ -1,11 +1,15 @@
 // Vercel serverless proxy: browser -> /api/* (same origin) -> Railway API with a server-side token.
 // The token (PULSE_API_TOKEN) and Railway URL (RAILWAY_API_URL) live only in Vercel env vars.
 export default async function handler(req, res) {
-  const base = (process.env.RAILWAY_API_URL || "").replace(/\/$/, "");
+  let base = (process.env.RAILWAY_API_URL || "").trim();
   if (!base) {
     res.status(500).json({ detail: "RAILWAY_API_URL is not set on Vercel" });
     return;
   }
+  if (!base.startsWith("http://") && !base.startsWith("https://")) {
+    base = `https://${base}`;
+  }
+  base = base.replace(/\/+$/, "").replace(/\/api$/, "");
   const path = [].concat(req.query.path || []).join("/");
   const qs = new URLSearchParams(req.query);
   qs.delete("path");

@@ -1,5 +1,9 @@
 // Empty in local dev (Vite proxies /api); on Vercel set VITE_API_BASE to the Railway API URL.
-const BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+let BASE = (import.meta.env.VITE_API_BASE || "").trim();
+if (BASE && !BASE.startsWith("http://") && !BASE.startsWith("https://")) {
+  BASE = `https://${BASE}`;
+}
+BASE = BASE.replace(/\/+$/, "").replace(/\/api$/, "");
 
 async function req(path, opts) {
   const r = await fetch(BASE + path, opts);
