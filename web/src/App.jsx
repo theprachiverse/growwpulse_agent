@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 import Icon from "./components/Icon.jsx";
 import PulseTab from "./tabs/PulseTab.jsx";
@@ -16,6 +16,48 @@ const TABS = [
   ["run", "Runs", "account_tree", "Pipeline runs"],
 ];
 
+const STATUS_POLL_MS = 15000;
+
+function ago(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 48 * 60) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+
+// Header status pill: what the pipeline is doing now, else how the last run ended.
+function runPill(status) {
+  const job = status?.job;
+  if (job?.state === "running") {
+    return { dot: "warn", text: `Running ${job.week || ""} · started ${ago(job.started_at)}` };
+  }
+  if (job?.state === "failed") return { dot: "bad", text: "Last run failed", title: job.error };
+  const last = status?.last_run;
+  if (!last) return { dot: "ok", text: "Idle · no runs yet" };
+  const ok = last.status === "success";
+  return {
+    dot: ok ? "ok" : "bad",
+    text: `Idle · Last run: ${last.week} ${ago(last.finished_at)}${ok ? "" : ` (${last.status})`}`,
+    title: new Date(last.finished_at).toLocaleString(),
+  };
+}
+
+function budgetPill(b) {
+  if (!b) return null;
+  const left = `${Math.round(b.tokens_remaining / 1000)}k`;
+  const blocked = Boolean(b.blocked_until) || b.runs_used >= b.runs_max;
+  const low = b.tokens_remaining < b.estimated_run_tokens;
+  return {
+    warn: blocked || low,
+    text: `Runs ${b.runs_used}/${b.runs_max} · ${left} tokens left`,
+    title:
+      `Today (UTC): ${b.tokens_used.toLocaleString()} of ${b.tokens_allowance.toLocaleString()} tokens used, ` +
+      `a run needs ~${b.estimated_run_tokens.toLocaleString()}.` +
+      (b.blocked_until ? ` Groq quota exhausted until ${new Date(b.blocked_until).toLocaleString()}.` : ""),
+  };
+}
+
 function initialTheme() {
   try {
     const saved = localStorage.getItem("pulse-theme");
@@ -30,6 +72,7 @@ export default function App() {
   const [week, setWeek] = useState(null);
   const [data, setData] = useState(null);
   const [health, setHealth] = useState(null);
+  const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState(initialTheme);
 
@@ -74,10 +117,25 @@ export default function App() {
     }
   }, []);
 
+  const loadStatus = useCallback(() => api.status().then(setStatus).catch(() => {}), []);
+
   useEffect(() => { loadWeeks(); }, [loadWeeks]);
   useEffect(() => { loadWeek(week); }, [week, loadWeek]);
 
-  const refresh = () => { loadWeeks(); loadWeek(week); };
+  const refresh = () => { loadWeeks(); loadWeek(week); loadStatus(); };
+
+  // Keep the header live, and reload the data when a run that was in progress finishes.
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    loadStatus();
+    const id = setInterval(loadStatus, STATUS_POLL_MS);
+    return () => clearInterval(id);
+  }, [loadStatus]);
+  useEffect(() => {
+    const running = status?.job?.state === "running";
+    if (wasRunning.current && !running) { loadWeeks(); loadWeek(week); }
+    wasRunning.current = running;
+  }, [status, week, loadWeeks, loadWeek]);
 
   const handleSelectChange = (e) => {
     const val = e.target.value;
@@ -125,7 +183,7 @@ export default function App() {
             </div>
             <div className="status-row"><i className={`dot ${ok(health?.llm_key_set)}`} />LLM Key: {health?.llm_key_set ? "Active (Groq OSS 120B)" : "Missing"}</div>
             <div className="status-row"><i className={`dot ${health?.mcp_token_set ? "ok" : "warn"}`} />MCP Server: {health?.mcp_token_set ? "Connected" : "Not Set"}</div>
-            <div className="status-row"><i className={`dot ${error ? "bad" : "ok"}`} />DB Sync: {error ? "Unreachable" : "Synced 4m ago"}</div>
+            <div className="status-row"><i className={`dot ${error ? "bad" : "ok"}`} />API: {error ? "Unreachable" : "Connected"}</div>
             {health?.read_only && <div className="status-row"><i className="dot warn" />Read-only demo</div>}
           </div>
           <div className="side-tools">
@@ -155,22 +213,26 @@ export default function App() {
                 <option value="__custom__">Generate for custom week / date…</option>
               </optgroup>
             </select>
-            <div className="topbar-status-pill hide-md">
-              <span className="dot ok" /> Pipeline idle · Last run: 18 Oct 04:30 IST
-            </div>
+            {(() => {
+              const p = runPill(status);
+              return (
+                <div className="topbar-status-pill hide-md" title={p.title}>
+                  <span className={`dot ${p.dot}`} /> {p.text}
+                </div>
+              );
+            })()}
           </div>
           <div className="right">
-            <div className="topbar-tokens-pill hide-md">
-              <Icon name="verified_user" sm style={{ color: "#00b386" }} />
-              <span>Tokens Configured</span>
-            </div>
-            <button className="btn ghost hide-md" onClick={() => setTab("reviews")}>
-              <Icon name="search" sm />
-              <span>Quick search</span>
-              <kbd>⌘K</kbd>
-            </button>
-            <button className="btn ghost hide-md" onClick={refresh} title="Refresh data">
-              <Icon name="refresh" sm /> Refresh
+            {(() => {
+              const b = budgetPill(status?.budget);
+              return b && (
+                <div className={`topbar-budget-pill hide-md${b.warn ? " warn" : ""}`} title={b.title}>
+                  <Icon name="data_usage" sm /> <span>{b.text}</span>
+                </div>
+              );
+            })()}
+            <button className="icon-btn" onClick={refresh} title="Refresh data" aria-label="Refresh data">
+              <Icon name="refresh" sm />
             </button>
             <button className="btn" onClick={() => openRunModal(week === "all" ? "auto" : week, "auto")}>
               <Icon name="play_arrow" sm /> Run pipeline

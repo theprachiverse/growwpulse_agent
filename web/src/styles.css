@@ -891,7 +891,7 @@ td.num, th.num { text-align: right; }
   color: var(--text-2);
   white-space: nowrap;
 }
-.topbar-tokens-pill {
+.topbar-budget-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -903,16 +903,7 @@ td.num, th.num { text-align: right; }
   font-weight: 600;
   color: var(--text-2);
 }
-.topbar kbd {
-  font-size: 10px;
-  font-family: ui-monospace, monospace;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  padding: 1px 4px;
-  border-radius: 4px;
-  color: var(--muted);
-  margin-left: 4px;
-}
+.topbar-budget-pill.warn { color: var(--warn); border-color: var(--warn); }
 .pulse-dot-ping {
   position: relative;
   display: inline-flex;

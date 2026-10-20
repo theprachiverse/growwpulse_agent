@@ -24,6 +24,7 @@ export const api = {
   week: (w) => req(`/api/weeks/${w}`),
   reviews: (w, params) => req(`/api/weeks/${w}/reviews?${new URLSearchParams(params)}`),
   runStatus: () => req("/api/run"),
+  status: () => req("/api/status"),
   publishSettings: () => req("/api/publish/settings"),
   savePublishSettings: (body) => post("/api/publish/settings", body),
   publishState: (w) => req(`/api/weeks/${w}/publish`),

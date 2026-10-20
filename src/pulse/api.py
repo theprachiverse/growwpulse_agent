@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from pulse import ui_service
 from pulse.config import get_settings
+from pulse.llm.budget import budget_from_settings
 from pulse.observability.logging import get_logger
 from pulse.publish.errors import PublishError
 from pulse.run_store import RunStore
@@ -441,6 +442,33 @@ def get_reviews(
 @app.get("/api/run")
 def run_status() -> dict[str, Any]:
     return ui_service.job_status()
+
+
+@app.get("/api/status")
+def live_status() -> dict[str, Any]:
+    """Header state: the running job, the latest finished run, and today's LLM budget."""
+    store = _store()
+    runs = Path(get_settings().data_dir) / "runs"
+    last_run: dict[str, Any] | None = None
+    for p in runs.glob("*"):
+        if not (p.is_dir() and WEEK_RE.match(p.name)):
+            continue
+        manifest = store.load_manifest(p.name)
+        if manifest and manifest.finished_at:
+            finished = manifest.finished_at.isoformat()
+            if last_run is None or finished > last_run["finished_at"]:
+                last_run = {
+                    "week": manifest.week,
+                    "status": manifest.status,
+                    "finished_at": finished,
+                }
+
+    ledger = None if _read_only() else budget_from_settings(get_settings())
+    return {
+        "job": ui_service.job_status(),
+        "last_run": last_run,
+        "budget": ledger.status() if ledger else None,
+    }
 
 
 @app.post("/api/run", status_code=202)
