@@ -71,7 +71,8 @@ def classify_by_centroid(
 
     if best_sim >= min_similarity:
         return best_theme, round(best_sim, 3)
-    return "other", round(max(0.0, 1.0 - best_sim), 3)
+    # SVD embeddings are signed, so best_sim can be negative; keep confidence within [0, 1].
+    return "other", round(min(1.0, max(0.0, 1.0 - best_sim)), 3)
 
 
 def format_themes_definition(themes: list[ThemeSpec]) -> str:

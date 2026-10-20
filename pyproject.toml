@@ -20,8 +20,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Local embeddings (pulls in torch). Lazily imported, so P0 tooling works without it.
-embeddings = ["sentence-transformers>=3.0"]
 # Local web UI (pulse serve)
 web = ["fastapi>=0.115", "uvicorn>=0.30"]
 
@@ -89,7 +87,6 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
     "google_play_scraper.*",
-    "sentence_transformers.*",
     "sklearn.*",
     "langdetect.*",
     "presidio_analyzer.*",

@@ -185,6 +185,14 @@ def test_classify_by_centroid():
     assert theme_id == "other"
 
 
+def test_classify_by_centroid_confidence_stays_in_unit_range_for_negative_similarity():
+    # Signed (SVD) embeddings can be anti-correlated with every centroid.
+    centroids = {"t1": [1.0, 0.0], "t2": [0.0, 1.0]}
+    theme_id, conf = classify_by_centroid([-1.0, -0.006], centroids)
+    assert theme_id == "other"
+    assert 0.0 <= conf <= 1.0
+
+
 def test_classify_reviews_with_completeness_and_fallback():
     r1 = make_clean_review("rid_1")
     r2 = make_clean_review("rid_2")

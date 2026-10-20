@@ -1,14 +1,15 @@
 """Embeddings generation and disk caching (Task 2.5).
 
 Embeds: `clean_title + ". " + clean_text` (or just `clean_text` if title is None).
-Caches embeddings by SHA-256 text hash in `data/cache/embeddings.npz` to avoid redundant calls.
+Clients with a fixed embedding space cache by SHA-256 text hash in `data/cache/embeddings.npz`.
+Corpus-fitted clients (TF-IDF/SVD) are refitted on every call instead, which is cheap.
 """
 
 from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -19,6 +20,15 @@ if TYPE_CHECKING:
     from pulse.llm.client import LLMClient
 
 logger = get_logger("pulse.embeddings")
+
+
+@runtime_checkable
+class CorpusEmbedder(Protocol):
+    """A client whose embedding space must be fitted on the review corpus before `embed`."""
+
+    def fit_embeddings(self, texts: list[str]) -> None: ...
+
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
 def text_to_embed(clean_title: str | None, clean_text: str) -> str:
@@ -99,8 +109,16 @@ def embed_reviews(
     if not reviews:
         return []
 
-    cache = EmbeddingCache(cache_dir=cache_dir)
     canonical_texts = [text_to_embed(r.clean_title, r.clean_text) for r in reviews]
+
+    if isinstance(client, CorpusEmbedder):
+        # Corpus-fitted spaces (TF-IDF/SVD): a vector is only meaningful relative to the
+        # corpus it was fitted on, so per-text caching would mix incompatible spaces.
+        logger.info("fitting_embeddings", total=len(reviews))
+        client.fit_embeddings(canonical_texts)
+        return client.embed(canonical_texts)
+
+    cache = EmbeddingCache(cache_dir=cache_dir)
     hashes = [compute_text_hash(t) for t in canonical_texts]
 
     # Identify cache misses

@@ -2,7 +2,7 @@
 
 Implements:
 - `LLMClient` Protocol (complete_json, embed, get_usage)
-- `GroqLocalEmbedClient`: Groq for JSON chat completions + local sentence-transformers
+- `GroqLocalEmbedClient`: Groq for JSON chat completions + local scikit-learn TF-IDF/SVD embeddings
 - `MockLLMClient`: In-memory fixture/mock client for offline testing
 - Factory `get_llm_client(...)`
 
@@ -20,6 +20,7 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from pulse.llm.embedder import DEFAULT_COMPONENTS, TfidfSvdEmbedder
 from pulse.observability.logging import get_logger
 
 logger = get_logger("pulse.llm")
@@ -74,38 +75,31 @@ def _server_retry_wait(resp: httpx.Response) -> float:
 
 
 class GroqLocalEmbedClient:
-    """Production client: Groq API for chat completion + sentence-transformers for embeddings."""
+    """Production client: Groq API for chat completion + scikit-learn TF-IDF/SVD embeddings."""
 
     def __init__(
         self,
         api_key: str | None = None,
         chat_model: str = "openai/gpt-oss-120b",
-        embed_model: str = "sentence-transformers/all-MiniLM-L6-v2",
         base_url: str = "https://api.groq.com/openai/v1",
         timeout_s: float = 60.0,
         max_retries: int = 4,
+        embed_dim: int = DEFAULT_COMPONENTS,
     ) -> None:
         self.api_key = api_key or ""
         self.chat_model = chat_model
-        self.embed_model_name = embed_model
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
         self.max_retries = max_retries
 
-        self._embedder: Any = None
+        self.embedder = TfidfSvdEmbedder(n_components=embed_dim)
         self._tokens_prompt: int = 0
         self._tokens_completion: int = 0
         self._calls: int = 0
 
-    @property
-    def embedder(self) -> Any:
-        """Lazy loader for sentence-transformers model."""
-        if self._embedder is None:
-            from sentence_transformers import SentenceTransformer
-
-            logger.info("loading_embedding_model", model=self.embed_model_name)
-            self._embedder = SentenceTransformer(self.embed_model_name)
-        return self._embedder
+    def fit_embeddings(self, texts: list[str]) -> None:
+        """Fit the embedding space on the review corpus; later `embed` calls reuse it."""
+        self.embedder.fit(texts)
 
     def get_usage(self) -> dict[str, int]:
         return {
@@ -252,13 +246,10 @@ class GroqLocalEmbedClient:
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        embeddings = self.embedder.encode(
-            texts,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        )
-        return [[float(x) for x in emb] for emb in embeddings]
+        if not self.embedder.fitted:
+            logger.warning("embedder_fitted_on_ad_hoc_texts", count=len(texts))
+            self.embedder.fit(texts)
+        return self.embedder.transform(texts)
 
 
 class MockLLMClient:
@@ -330,7 +321,6 @@ def get_llm_client(
     provider: str | None = None,
     api_key: str | None = None,
     chat_model: str | None = None,
-    embed_model: str | None = None,
 ) -> LLMClient:
     """Factory creating an LLMClient instance based on configuration."""
     from pulse.config import get_settings
@@ -339,13 +329,11 @@ def get_llm_client(
     prov = (provider or settings.llm_provider).lower()
     key = api_key or settings.llm_api_key
     c_model = chat_model or settings.app_config.llm.model_chat
-    e_model = embed_model or settings.app_config.llm.model_embed
 
     if prov in ("groq", "openai"):
         return GroqLocalEmbedClient(
             api_key=key,
             chat_model=c_model,
-            embed_model=e_model,
             base_url=settings.app_config.llm.base_url,
             timeout_s=float(settings.app_config.llm.timeout_s),
             max_retries=settings.app_config.llm.max_retries,

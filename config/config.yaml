@@ -53,7 +53,7 @@ compose:
 
 llm:
   model_chat: openai/gpt-oss-120b  # Groq
-  model_embed: sentence-transformers/all-MiniLM-L6-v2  # local
+  model_embed: tfidf-svd  # local scikit-learn TF-IDF + truncated SVD (no key, no torch)
   base_url: https://api.groq.com/openai/v1
   timeout_s: 60
   max_retries: 6

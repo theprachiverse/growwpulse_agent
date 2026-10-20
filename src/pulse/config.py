@@ -189,7 +189,7 @@ class LLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model_chat: str = "openai/gpt-oss-120b"
-    model_embed: str = "sentence-transformers/all-MiniLM-L6-v2"
+    model_embed: str = "tfidf-svd"
     base_url: str = "https://api.groq.com/openai/v1"
     timeout_s: int = Field(default=60, gt=0)
     max_retries: int = Field(default=4, ge=0)
