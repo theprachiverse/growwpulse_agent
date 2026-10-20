@@ -148,7 +148,6 @@ export default function App() {
               {weeks.map((w) => (
                 <option key={w.week} value={w.week}>
                   {w.display_label || (w.label ? `${w.label} · ${w.week}` : w.week)}
-                  {w.week === "all" ? "" : w.has_pulse ? " (has pulse)" : w.total_reviews ? ` (${w.total_reviews} reviews)` : ""}
                 </option>
               ))}
               <optgroup label="Generate & actions">

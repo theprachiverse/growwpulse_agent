@@ -31,6 +31,13 @@ from pulse.utils.weeks import (
     week_end_date,
     week_start_date,
 )
+from pulse.week_stats import (
+    days_elapsed,
+    is_pulse_stale,
+    option_label,
+    posted_in_week,
+    pulse_window_weeks,
+)
 
 logger = get_logger("pulse.api")
 
@@ -94,6 +101,15 @@ def _week(week: str) -> str:
     return week
 
 
+def _latest_pulse_week(store: RunStore) -> str | None:
+    """Most recent week that has a generated pulse (the one 'All Reviews Till Now' shows)."""
+    runs = Path(get_settings().data_dir) / "runs"
+    for p in sorted(runs.glob("*"), reverse=True):
+        if p.is_dir() and WEEK_RE.match(p.name) and store.load_pulse(p.name) is not None:
+            return p.name
+    return None
+
+
 def _week_dir(week: str) -> Path:
     d = Path(get_settings().data_dir) / "runs" / _week(week)
     if not d.is_dir():
@@ -144,38 +160,38 @@ def list_weeks() -> list[dict[str, Any]]:
     latest_pulse = None
     latest_pulse_week = None
 
+    latest_pulse_stale = False
     for w in candidate_weeks:
         pulse = store.load_pulse(w)
         manifest = store.load_manifest(w)
-        total_revs = None
-        avg_rating = None
-        if pulse and pulse.total_reviews:
-            total_revs = pulse.total_reviews
-            avg_rating = pulse.avg_rating
-            if latest_pulse is None:
-                latest_pulse = pulse
-                latest_pulse_week = w
-        else:
-            clean_in_run = store.load_clean_reviews(w)
-            if clean_in_run:
-                total_revs = len(clean_in_run)
-                avg_rating = round(sum(r.rating for r in clean_in_run) / total_revs, 2)
-            else:
-                snaps = store.load_snapshot("play_store", w) + store.load_snapshot("app_store", w)
-                if snaps:
-                    total_revs = len(snaps)
-                    avg_rating = round(sum(r.rating for r in snaps) / total_revs, 2)
+
+        # Count what was posted in this week, never the size of the run's rolling-window file.
+        posted = posted_in_week(store, w)
+        total_revs = len(posted) or None
+        avg_rating = round(sum(r.rating for r in posted) / len(posted), 2) if posted else None
+        stale = is_pulse_stale(pulse, len(store.load_clean_reviews(w)))
+        if pulse and pulse.total_reviews and latest_pulse is None:
+            latest_pulse, latest_pulse_week, latest_pulse_stale = pulse, w, stale
 
         # Remove any option that has no reviews and no pulse
         if not pulse and not total_revs:
             continue
 
+        day = days_elapsed(w)
         weekly_items.append(
             {
                 "week": w,
                 "label": format_week_human(w),
+                "display_label": option_label(
+                    w, format_week_human(w), len(posted), pulse, stale, day
+                ),
                 "has_pulse": pulse is not None,
                 "total_reviews": total_revs,
+                "window_reviews": pulse.total_reviews if pulse else None,
+                "window_weeks": pulse_window_weeks(pulse) if pulse else None,
+                "pulse_stale": stale,
+                "is_partial": day is not None,
+                "days_elapsed": day,
                 "avg_rating": avg_rating,
                 "status": manifest.status if manifest else None,
             }
@@ -189,14 +205,18 @@ def list_weeks() -> list[dict[str, Any]]:
 
     # Prepend the overarching "All Reviews Till Now" option
     all_label = (
-        f"📊 All Reviews Till Now ({latest_pulse.window_start} → {latest_pulse.window_end} · 10 Weeks · {latest_pulse.total_reviews:,} reviews)"
+        f"📊 All Reviews Till Now ({latest_pulse.window_start} → {latest_pulse.window_end} · "
+        f"{pulse_window_weeks(latest_pulse)} Weeks · {latest_pulse.total_reviews:,} reviews"
+        f"{' · ⚠ outdated' if latest_pulse_stale else ''})"
         if latest_pulse
-        else "📊 All Reviews Till Now (10-Week Window)"
+        else "📊 All Reviews Till Now"
     )
     all_option = {
         "week": "all",
-        "label": "All Reviews Till Now (10-Week Window)",
+        "label": "All Reviews Till Now",
         "display_label": all_label,
+        "window_weeks": pulse_window_weeks(latest_pulse) if latest_pulse else None,
+        "pulse_stale": latest_pulse_stale,
         "has_pulse": latest_pulse is not None,
         "total_reviews": latest_pulse.total_reviews
         if latest_pulse
@@ -216,15 +236,7 @@ def get_week(week: str) -> dict[str, Any]:
     store = _store()
 
     if week == "all":
-        # Find latest run with pulse
-        runs = Path(get_settings().data_dir) / "runs"
-        pulse_week = None
-        for p in sorted(runs.glob("*"), reverse=True):
-            if p.is_dir() and WEEK_RE.match(p.name) and (p / "pulse.json").exists():
-                pulse_week = p.name
-                break
-        if not pulse_week:
-            pulse_week = last_completed_week()
+        pulse_week = _latest_pulse_week(store) or last_completed_week()
 
         pulse = store.load_pulse(pulse_week)
         themes = store.load_themes(pulse_week)
@@ -244,7 +256,8 @@ def get_week(week: str) -> dict[str, Any]:
 
         return {
             "week": "all",
-            "label": f"All Reviews Till Now ({pulse.window_start} → {pulse.window_end} · 10-Week Window)"
+            "label": f"All Reviews Till Now ({pulse.window_start} → {pulse.window_end} · "
+            f"{pulse_window_weeks(pulse)}-Week Window)"
             if pulse
             else "All Reviews Till Now",
             "pulse": pulse.model_dump(mode="json") if pulse else None,
@@ -260,8 +273,9 @@ def get_week(week: str) -> dict[str, Any]:
                 if pulse
                 else dict(Counter(r.source for r in clean_reviews)),
                 "avg_rating_by_source": pulse.avg_rating_by_source if pulse else {},
-                "window_start": pulse.window_start if pulse else "2026-08-10",
-                "window_end": pulse.window_end if pulse else "2026-10-18",
+                "window_start": pulse.window_start if pulse else None,
+                "window_end": pulse.window_end if pulse else None,
+                "window_weeks": pulse_window_weeks(pulse) if pulse else None,
             },
         }
 
@@ -270,10 +284,8 @@ def get_week(week: str) -> dict[str, Any]:
     manifest = store.load_manifest(week)
     eval_report = store.load_eval_report(week)
 
-    # Clean reviews for this specific week
-    reviews = store.load_clean_reviews(week)
-    if not reviews:
-        reviews = store.load_snapshot("play_store", week) + store.load_snapshot("app_store", week)
+    # Reviews posted during this specific week (not the run's whole rolling window)
+    reviews = posted_in_week(store, week)
 
     total_revs = len(reviews)
     avg_rating = round(sum(r.rating for r in reviews) / total_revs, 2) if total_revs else None
@@ -290,8 +302,9 @@ def get_week(week: str) -> dict[str, Any]:
     if themes:
         themes_out = [t.model_dump(mode="json") for t in themes]
     else:
-        parent_themes = store.load_themes("2026-W42")
-        parent_assignments = {a["rid"]: a for a in store.load_assignments("2026-W42")}
+        parent_week = _latest_pulse_week(store) or last_completed_week()
+        parent_themes = store.load_themes(parent_week)
+        parent_assignments = {a["rid"]: a for a in store.load_assignments(parent_week)}
         if parent_themes and reviews and parent_assignments:
             theme_counts: dict[str, int] = defaultdict(int)
             theme_ratings: dict[str, list[int]] = defaultdict(list)
@@ -337,6 +350,11 @@ def get_week(week: str) -> dict[str, Any]:
             "avg_rating_by_source": avg_rating_by_source,
             "window_start": str(week_start_date(week)),
             "window_end": str(week_end_date(week)),
+            "is_partial": days_elapsed(week) is not None,
+            "days_elapsed": days_elapsed(week),
+            "pulse_stale": is_pulse_stale(pulse, len(store.load_clean_reviews(week))),
+            "window_reviews": pulse.total_reviews if pulse else None,
+            "window_weeks": pulse_window_weeks(pulse) if pulse else None,
         },
     }
 
@@ -357,19 +375,25 @@ def get_reviews(
     store = _store()
 
     if week == "all":
-        # Load all reviews from overarching run (e.g. 2026-W42 which contains all 10 weeks of clean reviews)
-        pulse_week = "2026-W42"
+        # The latest pulse's run holds its whole rolling window of clean reviews
+        pulse_week = _latest_pulse_week(store) or last_completed_week()
         reviews = store.load_clean_reviews(pulse_week)
         assign = {a["rid"]: a for a in store.load_assignments(pulse_week)}
     else:
-        reviews = store.load_clean_reviews(week)
-        if not reviews:
-            reviews = store.load_snapshot("play_store", week) + store.load_snapshot(
-                "app_store", week
-            )
+        # A week with a pulse shows the window behind it (what its themes were counted on);
+        # a week without one shows only the reviews posted in that week.
+        if store.load_pulse(week) is not None:
+            reviews = store.load_clean_reviews(week)
+        else:
+            reviews = posted_in_week(store, week)
         assign = {a["rid"]: a for a in store.load_assignments(week)}
         if not assign:
-            assign = {a["rid"]: a for a in store.load_assignments("2026-W42")}
+            fallback_week = _latest_pulse_week(store)
+            assign = (
+                {a["rid"]: a for a in store.load_assignments(fallback_week)}
+                if fallback_week
+                else {}
+            )
 
     if not reviews:
         return {"total": 0, "items": []}

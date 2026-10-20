@@ -174,8 +174,7 @@ export default function RunModal({
                   <option value={currentW}>{currentW} (Coming Week)</option>
                   {weeks?.filter((w) => w.week !== "all").map((w) => (
                     <option key={w.week} value={w.week}>
-                      {w.label ? `${w.label} · ${w.week}` : w.week}
-                      {w.has_pulse ? " (has pulse)" : w.total_reviews ? ` (${w.total_reviews} reviews)` : ""}
+                      {w.display_label || (w.label ? `${w.label} · ${w.week}` : w.week)}
                     </option>
                   ))}
                 </select>
