@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import CleanReview
 from pulse.observability.logging import get_logger
 from pulse.theming.classify import classify_reviews
@@ -111,6 +112,8 @@ def residual_pass(
 
     try:
         new_theme = discover_residual_theme(others, themes, llm_client)
+    except BudgetExceededError:
+        raise
     except Exception as exc:
         logger.warning("residual_discovery_failed", error=str(exc))
         return themes, assignments

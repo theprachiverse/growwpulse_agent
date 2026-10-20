@@ -20,6 +20,12 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from pulse.llm.budget import (
+    DailyQuotaExceededError,
+    LLMBudget,
+    budget_from_settings,
+    parse_retry_seconds,
+)
 from pulse.llm.embedder import DEFAULT_COMPONENTS, TfidfSvdEmbedder
 from pulse.observability.logging import get_logger
 
@@ -85,8 +91,10 @@ class GroqLocalEmbedClient:
         timeout_s: float = 60.0,
         max_retries: int = 4,
         embed_dim: int = DEFAULT_COMPONENTS,
+        budget: LLMBudget | None = None,
     ) -> None:
         self.api_key = api_key or ""
+        self.budget = budget
         self.chat_model = chat_model
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
@@ -125,6 +133,9 @@ class GroqLocalEmbedClient:
                 "LLM_API_KEY is not set. Please add it to your .env file or environment."
             )
 
+        if self.budget is not None:
+            self.budget.assert_available()
+
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -153,7 +164,19 @@ class GroqLocalEmbedClient:
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),
                     }
+                    if self.budget is not None:
+                        self.budget.record_tokens(
+                            token_info["prompt_tokens"] + token_info["completion_tokens"]
+                        )
                     return content, token_info
+
+                # A spent daily quota will not recover within the retry window: fail fast.
+                if resp.status_code == 429 and "per day" in resp.text:
+                    if self.budget is not None:
+                        self.budget.mark_exhausted(parse_retry_seconds(resp.text))
+                    raise DailyQuotaExceededError(
+                        f"Groq daily token quota exhausted: {resp.text[:160]}"
+                    )
 
                 # Retry on 429 rate limit or 5xx server errors
                 if resp.status_code in (429, 500, 502, 503, 504):
@@ -321,6 +344,7 @@ def get_llm_client(
     provider: str | None = None,
     api_key: str | None = None,
     chat_model: str | None = None,
+    budget: LLMBudget | None = None,
 ) -> LLMClient:
     """Factory creating an LLMClient instance based on configuration."""
     from pulse.config import get_settings
@@ -337,6 +361,7 @@ def get_llm_client(
             base_url=settings.app_config.llm.base_url,
             timeout_s=float(settings.app_config.llm.timeout_s),
             max_retries=settings.app_config.llm.max_retries,
+            budget=budget if budget is not None else budget_from_settings(settings),
         )
     elif prov == "mock":
         return MockLLMClient()

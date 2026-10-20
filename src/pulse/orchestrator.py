@@ -229,12 +229,20 @@ class Orchestrator:
         self._llm_client = llm_client
         self._mcp_client = mcp_client
 
-    def get_llm(self) -> LLMClient:
+    def get_llm(self, spends_tokens: bool = True) -> LLMClient:
+        """The LLM client; reserves one of today's budgeted runs when a real client is built.
+
+        Injected clients (tests, callers with their own limits) bypass the daily budget.
+        """
         if self._llm_client is not None:
             return self._llm_client
+        from pulse.llm.budget import budget_from_settings
         from pulse.llm.client import get_llm_client
 
-        return get_llm_client()
+        budget = budget_from_settings(self.settings)
+        if budget is not None and spends_tokens:
+            budget.begin_run()  # raises BudgetExceededError before any work or spend
+        return get_llm_client(budget=budget)
 
     def run(
         self,
@@ -303,7 +311,7 @@ class Orchestrator:
                     raise PreflightError(msg)
                 logger.info("preflight_health_check_ok")
 
-            llm = self.get_llm()
+            llm = self.get_llm(spends_tokens=from_step != "publish")
             clean_reviews: list[CleanReview] = []
             ranked_themes: list[Theme] = []
             pulse_obj: Pulse | None = None

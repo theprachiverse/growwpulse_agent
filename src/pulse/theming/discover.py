@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import CleanReview, Theme
 from pulse.observability.logging import get_logger
 from pulse.theming.cluster import truncate_preview
@@ -151,6 +152,8 @@ def discover_themes(
             system_prompt=system_prompt,
         )
         discovered = result.themes
+    except BudgetExceededError:
+        raise
     except Exception as exc:
         logger.error("theme_discovery_llm_failed", error=str(exc))
         # Fallback to high-confidence seed themes if LLM fails

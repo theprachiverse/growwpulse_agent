@@ -16,6 +16,7 @@ from pulse.compose.models import (
     QuoteCandidate,
     QuoteSelectionResponse,
 )
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import CleanReview, Quote, Theme
 from pulse.observability.logging import get_logger
 from pulse.theming.discover import load_prompt_template
@@ -315,6 +316,8 @@ def select_quotes_with_llm(
                     month=month_str,
                 )
             )
+    except BudgetExceededError:
+        raise
     except Exception as exc:
         logger.warning("llm_quote_selection_failed_using_candidate_fallback", error=str(exc))
 

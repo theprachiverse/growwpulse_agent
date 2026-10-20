@@ -11,6 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 from pulse.compose.models import ShortenResponse
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import ActionIdea, Theme
 from pulse.observability.logging import get_logger
 from pulse.theming.discover import load_prompt_template
@@ -119,6 +120,8 @@ def run_shorten_pass(
         for a_item in response.actions:
             if a_item.shortened_rationale.strip():
                 shortened_actions[a_item.theme_id] = a_item.shortened_rationale.strip()
+    except BudgetExceededError:
+        raise
     except Exception as exc:
         logger.warning("llm_shorten_pass_failed_using_algorithmic_fallback", error=str(exc))
 

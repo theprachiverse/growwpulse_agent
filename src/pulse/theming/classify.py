@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import CleanReview
 from pulse.observability.logging import get_logger
 from pulse.theming.cluster import truncate_preview
@@ -180,6 +181,8 @@ def classify_reviews(
         item_map: dict[str, ClassificationItem] = {}
         try:
             item_map = classify_batch_with_llm(batch, themes, llm_client, system_prompt)
+        except BudgetExceededError:
+            raise
         except Exception as exc:
             logger.warning(
                 "batch_classification_llm_failed_using_fallback",

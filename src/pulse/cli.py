@@ -27,6 +27,7 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 from pulse.compose.pipeline import run_compose_pipeline
 from pulse.config import get_settings
 from pulse.ingest.fetcher import AllSourcesFailedError, build_sources, fetch_all
+from pulse.llm.budget import BudgetExceededError, budget_from_settings
 from pulse.llm.client import get_llm_client
 from pulse.models import Source
 from pulse.observability.logging import configure_logging, get_logger
@@ -87,6 +88,25 @@ def config() -> None:
     table.add_row("Chat Model", app_cfg.llm.model_chat)
     table.add_row("Embedding Model", app_cfg.llm.model_embed)
 
+    console.print(table)
+
+
+@app.command()
+def budget() -> None:
+    """Show today's remembered Groq budget (runs and tokens used; resets 00:00 UTC)."""
+    ledger = budget_from_settings(get_settings())
+    if ledger is None:
+        rprint("LLM budget tracking is disabled (llm.budget.enabled: false).")
+        return
+    st = ledger.status()
+    table = Table(title=f"LLM budget — {st['day']} (UTC)")
+    table.add_column("Item", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+    table.add_row("Runs", f"{st['runs_used']} / {st['runs_max']}")
+    table.add_row("Tokens used", f"{st['tokens_used']:,} / {st['tokens_allowance']:,}")
+    table.add_row("Tokens remaining", f"{st['tokens_remaining']:,}")
+    table.add_row("Estimated tokens per run", f"{st['estimated_run_tokens']:,}")
+    table.add_row("Blocked until", st["blocked_until"] or "—")
     console.print(table)
 
 
@@ -496,6 +516,10 @@ def run(
     except PreflightError as exc:
         rprint(f"\n[bold red]Pre-flight Error:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
+    except BudgetExceededError as exc:
+        rprint(f"\n[bold yellow]LLM budget:[/bold yellow] {exc}")
+        rprint("Check remaining budget with [cyan]pulse budget[/cyan].")
+        raise typer.Exit(code=3) from exc
     except Exception as exc:
         rprint(f"\n[bold red]Pipeline Error:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc

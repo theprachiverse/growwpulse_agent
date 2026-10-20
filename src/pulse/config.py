@@ -185,6 +185,18 @@ class LLMTemperatures(BaseModel):
     compose: float = Field(default=0.4, ge=0.0, le=1.0)
 
 
+class BudgetConfig(BaseModel):
+    """Daily Groq limits remembered across runs (ledger: <data_dir>/llm_budget.json)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    max_runs_per_day: int = Field(default=3, ge=1)
+    daily_token_limit: int = Field(default=200_000, gt=0)  # Groq on_demand TPD for gpt-oss-120b
+    safety_margin: float = Field(default=0.9, gt=0.0, le=1.0)  # plan to use at most this share
+    default_run_tokens: int = Field(default=60_000, gt=0)  # estimate until real runs are recorded
+
+
 class LLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -194,6 +206,7 @@ class LLMConfig(BaseModel):
     timeout_s: int = Field(default=60, gt=0)
     max_retries: int = Field(default=4, ge=0)
     temperature: LLMTemperatures = Field(default_factory=LLMTemperatures)
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
 
 
 class PublishConfig(BaseModel):

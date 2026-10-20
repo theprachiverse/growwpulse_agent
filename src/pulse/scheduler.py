@@ -15,6 +15,7 @@ import time
 from datetime import UTC, datetime
 
 from pulse.config import get_settings
+from pulse.llm.budget import BudgetExceededError
 from pulse.observability.logging import get_logger
 from pulse.orchestrator import run_pipeline
 from pulse.run_store import RunStore
@@ -48,6 +49,8 @@ def tick() -> None:
     logger.info("scheduled_run_start", week=week, live=live)
     try:
         run_pipeline(week=week, dry_run=not live, settings=settings, check_health=live)
+    except BudgetExceededError as exc:
+        logger.warning("scheduled_run_skipped_budget", week=week, reason=str(exc))
     except Exception as exc:
         logger.error("scheduled_run_failed", week=week, error=str(exc))
 

@@ -60,6 +60,12 @@ llm:
   temperature:
     classify: 0.0
     compose: 0.4
+  budget:                      # remembered across runs in <data_dir>/llm_budget.json; resets 00:00 UTC
+    enabled: true
+    max_runs_per_day: 3        # pipeline runs per day (dry runs count: they spend tokens too)
+    daily_token_limit: 200000  # Groq on_demand tokens-per-day for gpt-oss-120b
+    safety_margin: 0.9         # plan to use at most 90% of the limit
+    default_run_tokens: 60000  # per-run estimate until real runs are recorded (then learned)
 
 publish:
   email_mode: draft          # draft (default, nothing is sent) | send | off

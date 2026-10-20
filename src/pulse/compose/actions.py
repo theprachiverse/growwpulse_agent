@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from pulse.compose.models import ActionIdeasResponse
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import ActionIdea, Quote, Theme
 from pulse.observability.logging import get_logger
 from pulse.theming.discover import load_prompt_template
@@ -132,6 +133,8 @@ def generate_action_ideas(
                     owner_hint=item.owner_hint,
                 )
             )
+    except BudgetExceededError:
+        raise
     except Exception as exc:
         logger.warning("llm_action_generation_failed_using_fallback", error=str(exc))
 
