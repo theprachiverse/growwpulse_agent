@@ -167,23 +167,36 @@ td.num, th.num { text-align: right; }
 .mobile-nav button { background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--muted); padding: 4px 8px; cursor: pointer; }
 .mobile-nav button.on { color: var(--accent-ink); }
 
-/* ---------- reviews explorer (per Stitch mockup) ---------- */
-.mpill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); font-size: 12px; font-weight: 500; color: var(--muted); }
-.mpill b { color: var(--text); font-weight: 600; }
-.mpill.alt { background: var(--surface-2); } .mpill.alt .icon { color: var(--accent-ink); }
-.filterbox { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 14px; }
-.filter-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+/* ---------- reviews explorer (per Stitch design) ---------- */
+.filterbox { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 16px; }
+.filter-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .filter-bottom { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
-.searchbox { position: relative; display: flex; align-items: center; width: 380px; max-width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; gap: 8px; color: var(--muted); }
-.searchbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--surface); }
-.searchbox input { flex: 1; border: 0; background: none; box-shadow: none !important; min-height: 38px; padding: 0; color: var(--text); }
+.filter-selects { display: flex; flex-wrap: wrap; gap: 12px; }
+.sel { display: flex; flex-direction: column; gap: 4px; }
+.sel select { min-height: 40px; min-width: 200px; cursor: pointer; }
+.searchbox { position: relative; display: flex; align-items: center; flex: 1; min-width: 260px; max-width: 460px; height: 40px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px 0 12px; gap: 8px; color: var(--muted); transition: border-color .15s, box-shadow .15s; }
+.searchbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0, 179, 134, .15); background: var(--surface); }
+.searchbox input { flex: 1; min-width: 0; border: 0; background: none; box-shadow: none !important; min-height: 38px; padding: 0; color: var(--text); }
+.searchbox .icon-btn { display: grid; place-items: center; padding: 4px; }
 .chiprow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.fchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--bg); color: var(--text-2); cursor: pointer; font-size: 12px; font-weight: 500; }
-.fchip:hover { background: var(--surface-2); }
-.fchip em { font-style: normal; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
-.fchip.on { background: var(--accent); border-color: var(--accent); color: #fff; } .fchip.on em { color: rgba(255,255,255,.8); }
-.fchip.on.bad { background: var(--bad); border-color: var(--bad); }
-.seg .cnt { font-style: normal; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+.chiprow .label-caps { margin-right: 4px; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); cursor: pointer; font-size: 12px; font-weight: 500; transition: background .15s, border-color .15s; }
+.fchip:hover { background: var(--bg); border-color: #d0d7e2; }
+.fchip em { font-style: normal; font-size: 11px; color: var(--muted); }
+.fchip.on { background: var(--accent-soft); border-color: rgba(0, 179, 134, .35); color: var(--accent-ink); font-weight: 600; } .fchip.on em { color: var(--accent-ink); opacity: .75; }
+.seg .cnt { font-style: normal; font-size: 11px; color: var(--muted); font-weight: 500; }
+.result-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 2px 10px; font-size: 13px; color: var(--muted); }
+.result-bar b { color: var(--text); font-weight: 600; }
+.rev-list { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.rev-list .rev { position: relative; padding: 18px 24px; border-bottom: 1px solid var(--line); transition: background .15s; }
+.rev-list .rev:last-child { border-bottom: 0; }
+.rev-list .rev:hover { background: var(--bg); }
+.rev-list .rev:hover::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.rev-list .rev p { margin: 0; font-size: 15px; line-height: 24px; letter-spacing: -.005em; color: var(--text); }
+.rev .meta .when { font-size: 12px; color: var(--muted); }
+.rev .meta .helpful { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.chip.rate { font-weight: 700; }
+.pager { margin-top: 20px; }
 
 /* ---------- Vibrant Pulse Dashboard (per Stitch design) ---------- */
 .pulse-header {
