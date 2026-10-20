@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { SOURCE, pct } from "../api.js";
+import { useEffect, useState } from "react";
+import { SOURCE, api, pct } from "../api.js";
 import Icon from "../components/Icon.jsx";
 
 const THEME_CONFIG = [
@@ -12,7 +12,6 @@ const THEME_CONFIG = [
     badgeColor: "#e11d48",
     ratingBg: "#fff1f2",
     ratingColor: "#e11d48",
-    trend: "▲ +3.8% WoW",
   },
   {
     borderClass: "border-amber",
@@ -23,7 +22,6 @@ const THEME_CONFIG = [
     badgeColor: "#b45309",
     ratingBg: "#fffbeb",
     ratingColor: "#d97706",
-    trend: "▼ -2.1% WoW",
   },
   {
     borderClass: "border-blue",
@@ -34,7 +32,6 @@ const THEME_CONFIG = [
     badgeColor: "#1d4ed8",
     ratingBg: "#eff6ff",
     ratingColor: "#2563eb",
-    trend: "▼ -0.9% WoW",
   },
   {
     borderClass: "border-emerald",
@@ -45,7 +42,6 @@ const THEME_CONFIG = [
     badgeColor: "#047857",
     ratingBg: "#ecfdf5",
     ratingColor: "#059669",
-    trend: "▼ -1.4% WoW",
   },
   {
     borderClass: "border-purple",
@@ -56,7 +52,6 @@ const THEME_CONFIG = [
     badgeColor: "#6d28d9",
     ratingBg: "#f5f3ff",
     ratingColor: "#7c3aed",
-    trend: "▲ +0.5% WoW",
   },
 ];
 
@@ -65,45 +60,77 @@ const themeName = (themes, id) => themes?.find((t) => t.theme_id === id)?.name |
 export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }) {
   const [copiedDigest, setCopiedDigest] = useState(false);
   const [copiedQuote, setCopiedQuote] = useState(null);
+  const [pub, setPub] = useState(null);
+  const [settings, setSettings] = useState(null);
 
   const { pulse, week_summary, manifest, eval_report } = data;
   const isPending = !pulse;
+  const pulseWeek = data.pulse_week || data.week;
+
+  // Real delivery status lives in publish_state.json, not the run manifest.
+  useEffect(() => {
+    let live = true;
+    setPub(null);
+    api.publishState(pulseWeek).then((r) => live && setPub(r?.state || null)).catch(() => {});
+    return () => { live = false; };
+  }, [pulseWeek]);
+  useEffect(() => {
+    api.publishSettings().then(setSettings).catch(() => {});
+  }, []);
 
   const totalReviews = pulse?.total_reviews || week_summary?.total_reviews || 0;
-  const avgRating = pulse?.avg_rating || week_summary?.avg_rating || 3.0;
+  const avgRating = pulse?.avg_rating ?? week_summary?.avg_rating ?? null;
   const bySource = pulse?.reviews_by_source || week_summary?.reviews_by_source || {};
   const avgBySource = pulse?.avg_rating_by_source || week_summary?.avg_rating_by_source || {};
 
   const playCount = bySource.play_store || 0;
   const appCount = bySource.app_store || 0;
-  const playPct = totalReviews > 0 ? ((playCount / totalReviews) * 100).toFixed(1) : "82.0";
-  const appPct = totalReviews > 0 ? ((appCount / totalReviews) * 100).toFixed(1) : "18.0";
-  const playAvg = avgBySource.play_store != null ? avgBySource.play_store.toFixed(2) : avgRating.toFixed(2);
-  const appAvg = avgBySource.app_store != null ? avgBySource.app_store.toFixed(2) : avgRating.toFixed(2);
+  const playPct = totalReviews > 0 ? ((playCount / totalReviews) * 100).toFixed(1) : "0.0";
+  const appPct = totalReviews > 0 ? ((appCount / totalReviews) * 100).toFixed(1) : "0.0";
+  const playAvg = avgBySource.play_store != null ? avgBySource.play_store.toFixed(2) : "—";
+  const appAvg = avgBySource.app_store != null ? avgBySource.app_store.toFixed(2) : "—";
 
-  const wordCount = pulse?.word_count || (isPending ? 0 : 238);
-  const densityPct = Math.min(100, (wordCount / 250) * 100).toFixed(1);
-  const wordsRemaining = Math.max(0, 250 - wordCount);
+  const maxWords = eval_report?.max_words_allowed || 250;
+  const wordCount = pulse?.word_count || 0;
+  const densityPct = Math.min(100, (wordCount / maxWords) * 100).toFixed(1);
+  const wordsRemaining = Math.max(0, maxWords - wordCount);
 
   const themesList = (pulse?.top_themes || data.themes || []).slice(0, 5);
 
-  const lowRatingShare = themesList.length > 0
-    ? (themesList.reduce((acc, t) => acc + (t.low_rating_share || 0), 0) / themesList.length)
-    : 0.25;
-  const lowRatingPct = Math.round(lowRatingShare * 100);
+  // Review-weighted 1–2★ share across the listed themes.
+  const themedReviews = themesList.reduce((acc, t) => acc + (t.review_count || 0), 0);
+  const lowRatingPct = themedReviews > 0
+    ? Math.round((themesList.reduce((acc, t) => acc + (t.low_rating_share || 0) * (t.review_count || 0), 0) / themedReviews) * 100)
+    : 0;
 
   const windowStart = pulse?.window_start || week_summary?.window_start || "";
   const windowEnd = pulse?.window_end || week_summary?.window_end || "";
   const dateSpan = windowStart && windowEnd ? `${windowStart} – ${windowEnd}` : data.label || data.week;
 
-  const docUrl = manifest?.doc_url || (manifest?.doc_id ? `https://docs.google.com/document/d/${manifest.doc_id}` : null);
-  const docAppended = manifest?.publish?.doc_append?.status === "success" || !!manifest?.doc_id;
-  const emailDrafted = manifest?.publish?.email?.status === "success" || !!manifest?.draft_id;
-  const docSha = manifest?.publish?.doc_append?.content_sha256 ? `${manifest.publish.doc_append.content_sha256.slice(0, 7)}...` : "d8a9f...3c1";
+  const docUrl = pub?.doc_url || manifest?.doc_url || null;
+  const docDone = pub?.doc_append?.status === "done";
+  const docFailed = pub?.doc_append?.status === "failed";
+  const emailDone = pub?.email?.status === "done";
+  const emailMode = pub?.email?.mode;
+  const published = docDone || emailDone;
+  const docSha = pub?.doc_append?.content_sha256 ? `${pub.doc_append.content_sha256.slice(0, 7)}…` : null;
+
+  // The guardrails the problem statement requires (§4.3, §6, §8).
+  const CHECKS = [
+    ["verbatim", "Verbatim Quotes", "Every quote is copied word for word from a real review"],
+    ["pii", "No PII", "No usernames, emails, device IDs or other reviewer identifiers"],
+    ["word_limit", "Word Limit", `Note stays within ${maxWords} words`],
+    ["theme_count", "Theme Count", "At most 5 themes discovered; top 3 highlighted"],
+    ["quote_count", "3 Quotes", "Exactly 3 user quotes in the note"],
+    ["action_grounding", "3 Grounded Actions", "Exactly 3 actions, each tied to a theme"],
+  ];
+  const checks = eval_report?.checks;
+  const checksPassed = checks ? CHECKS.filter(([k]) => checks[k]).length : 0;
+  const allPassed = !!checks && checksPassed === CHECKS.length;
 
   const handleCopyDigest = () => {
-    const text = pulse?.markdown || themesList.map((t) => `${t.name}: ${t.definition}`).join("\n\n");
-    navigator.clipboard.writeText(text);
+    if (!pulse?.markdown) return;
+    navigator.clipboard.writeText(pulse.markdown);
     setCopiedDigest(true);
     setTimeout(() => setCopiedDigest(false), 2000);
   };
@@ -127,35 +154,39 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
               Week {data.week} <span className="dates">· {dateSpan}</span>
             </h1>
             <div className="pulse-badges-row">
-              <span className="badge-guardrails-pass">
-                <Icon name="check" sm /> Passed 5/5 guardrails
-              </span>
+              {checks && (
+                <span
+                  className="badge-guardrails-pass"
+                  style={allPassed ? undefined : { background: "#ffe4e6", color: "#e11d48" }}
+                >
+                  <Icon name={allPassed ? "check" : "warning"} sm /> Passed {checksPassed}/{CHECKS.length} guardrails
+                </span>
+              )}
               <span className="badge-published">
-                <span className="dot ok" style={{ width: 6, height: 6 }} /> {pulse ? "Published" : "Scrubbed"}
+                <span className={`dot ${published ? "ok" : ""}`} style={{ width: 6, height: 6 }} />{" "}
+                {published ? "Published" : pulse ? "Generated · not published" : "Scrubbed"}
               </span>
             </div>
           </div>
         </div>
 
         <div className="pulse-header-actions">
-          <button className="btn ghost sm" onClick={() => onSwitchTab?.("pulse")}>
-            <Icon name="dashboard" sm /> Executive View
-          </button>
-          <button className="btn ghost sm" onClick={() => onSwitchTab?.("publish")}>
-            <Icon name="article" sm /> Doc Preview
-          </button>
-          <button className="btn ghost sm" onClick={handleCopyDigest}>
+          <button
+            className="btn ghost sm"
+            onClick={handleCopyDigest}
+            disabled={!pulse?.markdown}
+            title={pulse?.markdown ? "Copy the pulse as markdown" : "Generate the pulse first"}
+          >
             <Icon name={copiedDigest ? "done" : "content_copy"} sm />
             {copiedDigest ? "Copied!" : "Copy Digest"}
           </button>
-          {docUrl ? (
+          <button className="btn ghost sm" onClick={() => onSwitchTab?.("publish")}>
+            <Icon name="cloud_upload" sm /> Publish
+          </button>
+          {docUrl && (
             <a href={docUrl} target="_blank" rel="noreferrer" className="btn ghost sm" style={{ color: "var(--accent-ink)" }}>
               <Icon name="open_in_new" sm /> Open Google Doc ↗
             </a>
-          ) : (
-            <button className="btn ghost sm" onClick={() => onSwitchTab?.("publish")} style={{ color: "var(--accent-ink)" }}>
-              <Icon name="open_in_new" sm /> Open Google Doc ↗
-            </button>
           )}
         </div>
       </div>
@@ -170,13 +201,10 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
           </div>
           <div className="pulse-metric-val">
             {totalReviews.toLocaleString()}
-            <span className="pulse-metric-pill green">
-              <Icon name="trending_up" sm /> +14.2% WoW
-            </span>
           </div>
           <div className="pulse-metric-footer">
-            <span>vs. rolling window</span>
-            <span className="text-emerald">100% parsed</span>
+            <span>Play Store + App Store</span>
+            <span className="text-emerald">PII-scrubbed</span>
           </div>
         </div>
 
@@ -184,20 +212,16 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
         <div className="pulse-metric-card">
           <div className="pulse-metric-top">
             <span className="pulse-metric-label">Blended Rating</span>
-            <span className="pulse-metric-pill green">
-              <Icon name="arrow_upward" sm /> +0.08 WoW
-            </span>
           </div>
           <div className="pulse-metric-val">
-            {avgRating.toFixed(2)} <span style={{ color: "#f59e0b", fontSize: 24 }}>★</span> <span style={{ fontSize: 18, color: "var(--muted)", fontWeight: 500 }}>/ 5.0</span>
+            {avgRating != null ? avgRating.toFixed(2) : "—"} <span style={{ color: "#f59e0b", fontSize: 24 }}>★</span> <span style={{ fontSize: 18, color: "var(--muted)", fontWeight: 500 }}>/ 5.0</span>
           </div>
           <div className="pulse-multi-bar" role="img" aria-label="Rating breakdown">
-            <span style={{ width: "62%", background: "#00b386" }} title="5★: 62%" />
-            <span style={{ width: "14%", background: "#38bdf8" }} title="4★: 14%" />
+            <span style={{ width: `${100 - lowRatingPct}%`, background: "#00b386" }} title={`3★–5★: ${100 - lowRatingPct}%`} />
             <span style={{ width: `${lowRatingPct}%`, background: "#f43f5e" }} title={`1★ & 2★: ${lowRatingPct}%`} />
           </div>
           <div className="pulse-metric-footer">
-            <span>5★ (62%) · 4★ (14%)</span>
+            <span>3★–5★ ({100 - lowRatingPct}%) · themed reviews</span>
             <span className="text-coral">1★ & 2★ ({lowRatingPct}%)</span>
           </div>
         </div>
@@ -241,14 +265,14 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
             <Icon name="description" sm style={{ color: "var(--accent)" }} />
           </div>
           <div className="pulse-metric-val">
-            {wordCount} <span style={{ fontSize: 18, color: "var(--muted)", fontWeight: 500 }}>/ 250 words</span>
+            {wordCount} <span style={{ fontSize: 18, color: "var(--muted)", fontWeight: 500 }}>/ {maxWords} words</span>
           </div>
           <div className="pulse-multi-bar">
             <span style={{ width: isPending ? "0%" : `${densityPct}%`, background: "#00b386" }} />
           </div>
           <div className="pulse-metric-footer">
             <span>{isPending ? "Pending generation" : `${densityPct}% target density`}</span>
-            <span className="text-emerald">{isPending ? "250 words budget" : `${wordsRemaining} words remaining`}</span>
+            <span className="text-emerald">{isPending ? `${maxWords} words budget` : `${wordsRemaining} words remaining`}</span>
           </div>
         </div>
       </div>
@@ -327,7 +351,11 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
                         >
                           {severity}
                         </span>
-                        <span className="theme-trend-badge">{cfg.trend}</span>
+                        {t.wow_delta != null && (
+                          <span className="theme-trend-badge">
+                            {t.wow_delta > 0 ? "▲" : t.wow_delta < 0 ? "▼" : "•"} {Math.abs(t.wow_delta).toFixed(1)} pts WoW
+                          </span>
+                        )}
                       </div>
                       <p className="theme-def-text">{t.definition}</p>
                     </div>
@@ -455,54 +483,50 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
           <div className="dist-card">
             <div className="dist-card-head">
               <span className="dist-card-title">Distribution Channels</span>
-              <span className="badge-guardrails-pass" style={{ fontSize: 10, padding: "2px 8px" }}>
-                <span className="dot ok" style={{ width: 5, height: 5 }} /> {pulse ? "Synced" : "Configured"}
+              <span className={published ? "badge-guardrails-pass" : "dist-item-badge gray"} style={{ fontSize: 10, padding: "2px 8px" }}>
+                {published && <span className="dot ok" style={{ width: 5, height: 5 }} />}{" "}
+                {published ? "Synced" : "Not published"}
               </span>
             </div>
 
-            {/* Google Doc Digest item */}
+            {/* Google Doc */}
             <div className="dist-item">
               <div className="dist-item-top">
                 <span className="dist-item-name">
                   <Icon name="description" sm style={{ color: "#00b386" }} />
-                  Google Doc Digest #{data.week.replace(/\D/g, "") || "42"}
+                  Google Doc · {pulseWeek}
                 </span>
-                <span className={`dist-item-badge ${docAppended ? "green" : "gray"}`}>
-                  {docAppended ? `Appended #${data.week.replace(/\D/g, "") || "42"} ✓` : "Ready to Append"}
+                <span className={`dist-item-badge ${docDone ? "green" : "gray"}`}>
+                  {docDone ? "Appended ✓" : docFailed ? "Failed" : "Not appended"}
                 </span>
               </div>
-              <div className="dist-item-detail">sha256: {docSha}</div>
-              {docUrl ? (
+              {docSha && <div className="dist-item-detail">sha256: {docSha}</div>}
+              {docUrl && (
                 <a href={docUrl} target="_blank" rel="noreferrer" className="dist-item-link">
-                  Direct Open ↗
+                  Open doc ↗
                 </a>
-              ) : (
-                <button className="dist-item-link" onClick={() => onSwitchTab?.("publish")}>
-                  Manage Target Doc ↗
-                </button>
               )}
             </div>
 
-            {/* Gmail Lead Digest item */}
+            {/* Gmail */}
             <div className="dist-item">
               <div className="dist-item-top">
                 <span className="dist-item-name">
                   <Icon name="mail" sm style={{ color: "#3b82f6" }} />
                   Gmail Lead Digest
                 </span>
-                <span className={`dist-item-badge ${emailDrafted ? "green" : "gray"}`}>
-                  {emailDrafted ? "Draft Created ✓" : "Draft on Publish"}
+                <span className={`dist-item-badge ${emailDone ? "green" : "gray"}`}>
+                  {emailDone ? (emailMode === "send" ? "Sent ✓" : "Draft created ✓") : "Not drafted"}
                 </span>
               </div>
-              <div className="dist-item-detail" style={{ color: "var(--text-2)" }}>
-                TO: groww-pm-leads@groww.in
-              </div>
+              {settings?.recipient && (
+                <div className="dist-item-detail" style={{ color: "var(--text-2)" }}>
+                  TO: {settings.recipient}
+                </div>
+              )}
               <div className="dist-item-detail">
-                SUBJ: [Pulse {data.week}] App Reviews Digest
+                SUBJ: Groww Weekly Review Pulse — {pulseWeek}
               </div>
-              <button className="dist-item-link" onClick={() => onSwitchTab?.("publish")}>
-                Preview draft
-              </button>
             </div>
 
             <div className="dist-disclaimer">
@@ -515,50 +539,35 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
           <div className="guardrail-card">
             <div className="guardrail-head">
               <span className="guardrail-title">Quality Checks &amp; Guardrails</span>
-              <span className="badge-guardrails-pass" style={{ fontSize: 10, padding: "2px 8px" }}>
-                5/5 Passed
-              </span>
+              {checks ? (
+                <span
+                  className="badge-guardrails-pass"
+                  style={{ fontSize: 10, padding: "2px 8px", ...(allPassed ? {} : { background: "#ffe4e6", color: "#e11d48" }) }}
+                >
+                  {checksPassed}/{CHECKS.length} Passed
+                </span>
+              ) : (
+                <span className="dist-item-badge gray">Not run</span>
+              )}
             </div>
 
-            <div className="guardrail-item">
-              <Icon name="check_circle" className="guardrail-icon-pass" sm />
-              <div className="guardrail-item-content">
-                <span className="guardrail-item-title">Verbatim Quote Integrity</span>
-                <span className="guardrail-item-sub">100% string alignment against raw Play &amp; App Store corpus</span>
-              </div>
-            </div>
-
-            <div className="guardrail-item">
-              <Icon name="check_circle" className="guardrail-icon-pass" sm />
-              <div className="guardrail-item-content">
-                <span className="guardrail-item-title">Zero PII Leakage</span>
-                <span className="guardrail-item-sub">All phone, PAN, Aadhaar, UPI, and Demat identifiers scrubbed</span>
-              </div>
-            </div>
-
-            <div className="guardrail-item">
-              <Icon name="check_circle" className="guardrail-icon-pass" sm />
-              <div className="guardrail-item-content">
-                <span className="guardrail-item-title">Executive Brevity Budget</span>
-                <span className="guardrail-item-sub">Strict 250-word ceiling enforced on note generation</span>
-              </div>
-            </div>
-
-            <div className="guardrail-item">
-              <Icon name="check_circle" className="guardrail-icon-pass" sm />
-              <div className="guardrail-item-content">
-                <span className="guardrail-item-title">Theme Boundedness</span>
-                <span className="guardrail-item-sub">At most 5 themes discovered; top 3 highlighted</span>
-              </div>
-            </div>
-
-            <div className="guardrail-item">
-              <Icon name="check_circle" className="guardrail-icon-pass" sm />
-              <div className="guardrail-item-content">
-                <span className="guardrail-item-title">Grounded Action Links</span>
-                <span className="guardrail-item-sub">Every recommended action traces directly to user review evidence</span>
-              </div>
-            </div>
+            {CHECKS.map(([key, title, sub]) => {
+              const ok = checks ? !!checks[key] : null;
+              return (
+                <div key={key} className="guardrail-item">
+                  <Icon
+                    name={ok === null ? "radio_button_unchecked" : ok ? "check_circle" : "cancel"}
+                    className={ok ? "guardrail-icon-pass" : undefined}
+                    sm
+                    style={ok === false ? { color: "#e11d48" } : ok === null ? { color: "var(--muted)" } : undefined}
+                  />
+                  <div className="guardrail-item-content">
+                    <span className="guardrail-item-title">{title}</span>
+                    <span className="guardrail-item-sub">{sub}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
