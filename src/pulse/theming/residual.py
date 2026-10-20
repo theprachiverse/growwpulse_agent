@@ -9,6 +9,7 @@ only if the new theme captures enough reviews, otherwise the original result sta
 from __future__ import annotations
 
 import random
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -99,6 +100,7 @@ def residual_pass(
     threshold: float,
     min_capture: float,
     batch_size: int = 50,
+    cache_dir: Path | str | None = None,
 ) -> tuple[list[ThemeSpec], list[ReviewAssignment]]:
     """Returns (themes, assignments); unchanged unless the residual theme is accepted."""
     share = other_share(assignments)
@@ -129,6 +131,7 @@ def residual_pass(
         llm_client=llm_client,
         batch_size=batch_size,
         request_delay_s=0.0,
+        cache_dir=cache_dir,
     )
     by_rid = {a.rid: a for a in redone}
     merged = [by_rid.get(a.rid, a) if a.theme_id == OTHER else a for a in assignments]

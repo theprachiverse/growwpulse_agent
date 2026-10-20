@@ -7,6 +7,7 @@ with strict 1-to-1 completeness validation, rate-limiting, and dense vector cent
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -14,6 +15,7 @@ import numpy as np
 from pulse.llm.budget import BudgetExceededError
 from pulse.models import CleanReview
 from pulse.observability.logging import get_logger
+from pulse.theming.cache import ClassificationCache, fingerprint, review_key
 from pulse.theming.cluster import truncate_preview
 from pulse.theming.discover import load_prompt_template
 from pulse.theming.models import (
@@ -86,6 +88,11 @@ def format_themes_definition(themes: list[ThemeSpec]) -> str:
     return "\n".join(lines)
 
 
+def _prompt_text(review: CleanReview) -> str:
+    """The review text exactly as the classification prompt shows it to the model."""
+    return truncate_preview(review.clean_text, max_words=50, max_chars=300)
+
+
 def classify_batch_with_llm(
     batch: list[CleanReview],
     themes: list[ThemeSpec],
@@ -136,6 +143,7 @@ def classify_reviews(
     theme_centroids: dict[str, list[float]] | None = None,
     batch_size: int = 50,
     request_delay_s: float = 0.2,
+    cache_dir: Path | str | None = None,
 ) -> list[ReviewAssignment]:
     """Classify all cleaned reviews into themes with 1-to-1 guarantee and centroid fallback.
 
@@ -147,6 +155,8 @@ def classify_reviews(
         theme_centroids: Optional precomputed centroid vectors for themes.
         batch_size: Batch size for LLM prompt (target 40..50).
         request_delay_s: Politeness delay between batches to respect rate limits.
+        cache_dir: If set, LLM answers are cached here and reused by later runs (see cache.py);
+            only reviews without a cached answer are sent to the LLM.
 
     Returns:
         list[ReviewAssignment]: Fully classified review assignments in input order.
@@ -162,59 +172,83 @@ def classify_reviews(
         fallback_text="You are an expert review classifier for the Groww investment platform.",
     )
 
-    rid_to_embedding = {r.rid: emb for r, emb in zip(reviews, review_embeddings, strict=False)}
-    assignments: list[ReviewAssignment] = []
+    cache = (
+        ClassificationCache(
+            cache_dir, fingerprint(themes, system_prompt, getattr(llm_client, "chat_model", ""))
+        )
+        if cache_dir is not None
+        else None
+    )
+
+    # Answers from earlier runs; only the rest goes to the LLM, packed into full batches.
+    keys = {r.rid: review_key(r.rid, _prompt_text(r)) for r in reviews}
+    item_map: dict[str, ClassificationItem] = {}
+    if cache is not None:
+        for r in reviews:
+            hit = cache.get(keys[r.rid])
+            if hit is not None:
+                item_map[r.rid] = hit
+    todo = [r for r in reviews if r.rid not in item_map]
 
     total = len(reviews)
-    n_batches = (total + batch_size - 1) // batch_size
+    n_batches = (len(todo) + batch_size - 1) // batch_size
     logger.info(
         "starting_batch_classification",
         total_reviews=total,
+        cached=total - len(todo),
         batches=n_batches,
         batch_size=batch_size,
     )
 
     for b_idx in range(n_batches):
-        start = b_idx * batch_size
-        batch = reviews[start : start + batch_size]
-
-        item_map: dict[str, ClassificationItem] = {}
+        batch = todo[b_idx * batch_size : (b_idx + 1) * batch_size]
         try:
-            item_map = classify_batch_with_llm(batch, themes, llm_client, system_prompt)
+            fresh = classify_batch_with_llm(batch, themes, llm_client, system_prompt)
         except BudgetExceededError:
+            if cache is not None:
+                cache.save()  # keep the progress made before the budget ran out
             raise
         except Exception as exc:
+            fresh = {}
             logger.warning(
                 "batch_classification_llm_failed_using_fallback",
                 batch_index=b_idx + 1,
                 error=str(exc),
             )
-
-        # Assemble assignments with completeness and confidence checks
-        for r in batch:
-            emb = rid_to_embedding.get(r.rid, [])
-            item = item_map.get(r.rid)
-
-            if item is None or item.confidence < 0.5:
-                # Centroid fallback if missing or low confidence
-                theme_id, conf = classify_by_centroid(emb, centroids)
-            else:
-                theme_id = item.theme_id
-                conf = item.confidence
-
-            assignments.append(
-                ReviewAssignment(
-                    rid=r.rid,
-                    theme_id=theme_id,
-                    confidence=conf,
-                    source=r.source,
-                    rating=r.rating,
-                    helpful_votes=r.helpful_votes,
-                )
-            )
+        item_map.update(fresh)
+        if cache is not None:
+            for rid, answer in fresh.items():
+                if rid in keys:
+                    cache.put(keys[rid], answer)
+            cache.save()
 
         if b_idx < n_batches - 1 and request_delay_s > 0:
             time.sleep(request_delay_s)
+
+    # Assemble assignments with completeness and confidence checks
+    rid_to_embedding = {r.rid: emb for r, emb in zip(reviews, review_embeddings, strict=False)}
+    assignments: list[ReviewAssignment] = []
+    for r in reviews:
+        emb = rid_to_embedding.get(r.rid, [])
+        item = item_map.get(r.rid)
+
+        if item is None or item.confidence < 0.5:
+            # Centroid fallback if missing or low confidence
+            theme_id, conf = classify_by_centroid(emb, centroids)
+        else:
+            theme_id = item.theme_id
+            conf = item.confidence
+
+        assignments.append(
+            ReviewAssignment(
+                rid=r.rid,
+                theme_id=theme_id,
+                confidence=conf,
+                source=r.source,
+                rating=r.rating,
+                helpful_votes=r.helpful_votes,
+            )
+        )
 
     logger.info("batch_classification_completed", total_assigned=len(assignments))
     return assignments

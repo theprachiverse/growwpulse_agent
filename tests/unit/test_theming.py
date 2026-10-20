@@ -455,3 +455,96 @@ def test_end_to_end_theming_pipeline(tmp_path: Path):
 
     loaded_assignments = run_store.load_assignments(week)
     assert len(loaded_assignments) == 25
+
+
+def _cache_test_setup():
+    themes = [
+        ThemeSpec(theme_id="t1", name="Trading", definition="Trading issues"),
+        ThemeSpec(theme_id="t2", name="Support", definition="Customer support"),
+    ]
+    centroids = {"t1": [1.0, 0.0], "t2": [0.0, 1.0]}
+    return themes, centroids
+
+
+def _classify(reviews, themes, centroids, client, cache_dir):
+    return classify_reviews(
+        reviews=reviews,
+        review_embeddings=[[1.0, 0.0]] * len(reviews),
+        themes=themes,
+        llm_client=client,
+        theme_centroids=centroids,
+        batch_size=10,
+        request_delay_s=0.0,
+        cache_dir=cache_dir,
+    )
+
+
+def test_classification_cache_only_sends_new_reviews_to_llm(tmp_path):
+    themes, centroids = _cache_test_setup()
+    old = [make_clean_review(f"rid_{i}") for i in range(4)]
+    first = MockLLMClient(
+        canned_responses=[
+            BatchClassificationResult(
+                items=[ClassificationItem(rid=r.rid, theme_id="t1", confidence=0.9) for r in old]
+            )
+        ]
+    )
+    _classify(old, themes, centroids, first, tmp_path)
+    assert first.get_usage()["llm_calls"] == 1
+
+    # Next run: same 4 reviews plus 2 new ones -> only the new ones are classified
+    new = [
+        make_clean_review(f"rid_new{i}", clean_text="Support never replies to my tickets.")
+        for i in range(2)
+    ]
+    second = MockLLMClient(
+        canned_responses=[
+            BatchClassificationResult(
+                items=[ClassificationItem(rid=r.rid, theme_id="t2", confidence=0.8) for r in new]
+            )
+        ]
+    )
+    out = _classify(old + new, themes, centroids, second, tmp_path)
+    assert second.get_usage()["llm_calls"] == 1
+    assert [a.theme_id for a in out] == ["t1"] * 4 + ["t2"] * 2
+
+    # Fully cached run makes no LLM call at all
+    third = MockLLMClient()
+    out3 = _classify(old + new, themes, centroids, third, tmp_path)
+    assert third.get_usage()["llm_calls"] == 0
+    assert [a.theme_id for a in out3] == [a.theme_id for a in out]
+
+
+def test_classification_cache_invalidated_when_themes_change(tmp_path):
+    themes, centroids = _cache_test_setup()
+    reviews = [make_clean_review("rid_1")]
+    batch = BatchClassificationResult(
+        items=[ClassificationItem(rid="rid_1", theme_id="t1", confidence=0.9)]
+    )
+    _classify(reviews, themes, centroids, MockLLMClient(canned_responses=[batch]), tmp_path)
+
+    changed = [*themes[:1], themes[1].model_copy(update={"definition": "Something else"})]
+    client = MockLLMClient(canned_responses=[batch])
+    _classify(reviews, changed, centroids, client, tmp_path)
+    assert client.get_usage()["llm_calls"] == 1  # new theme set -> reclassified, no stale hit
+
+
+def test_classification_cache_skips_reviews_llm_dropped(tmp_path):
+    themes, centroids = _cache_test_setup()
+    reviews = [make_clean_review("rid_1"), make_clean_review("rid_2")]
+    partial = BatchClassificationResult(
+        items=[ClassificationItem(rid="rid_1", theme_id="t1", confidence=0.9)]
+    )
+    _classify(reviews, themes, centroids, MockLLMClient(canned_responses=[partial]), tmp_path)
+
+    # rid_2 was dropped by the LLM, so it must be retried next run rather than cached
+    retry = MockLLMClient(
+        canned_responses=[
+            BatchClassificationResult(
+                items=[ClassificationItem(rid="rid_2", theme_id="t2", confidence=0.9)]
+            )
+        ]
+    )
+    out = _classify(reviews, themes, centroids, retry, tmp_path)
+    assert retry.get_usage()["llm_calls"] == 1
+    assert [a.theme_id for a in out] == ["t1", "t2"]

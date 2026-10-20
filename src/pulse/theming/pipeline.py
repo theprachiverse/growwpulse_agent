@@ -115,6 +115,7 @@ def run_theming_pipeline(
         themes=discovered_specs,
         llm_client=llm_client,
         batch_size=batch_size,
+        cache_dir=cache_dir,
     )
 
     # 6b. Residual pass: recover a missed product domain from a large 'other' bucket
@@ -129,6 +130,7 @@ def run_theming_pipeline(
             threshold=config.theming.residual_other_threshold,
             min_capture=config.theming.residual_min_capture,
             batch_size=batch_size,
+            cache_dir=cache_dir,
         )
 
     # 7. Multi-dimensional Ranking & Trend Tracking (3.4)
