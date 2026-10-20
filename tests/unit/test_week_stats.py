@@ -78,3 +78,36 @@ def test_option_label_states_which_number_is_which() -> None:
     partial = option_label("2026-W43", "October W4", 40, None, False, 2)
     assert "40 reviews so far" in partial
     assert "in progress (day 2/7)" in partial
+
+
+def test_previous_week_crosses_year_boundary() -> None:
+    from pulse.week_stats import previous_week
+
+    assert previous_week("2026-W42") == "2026-W41"
+    assert previous_week("2026-W01") == "2025-W52"
+
+
+def test_theme_breakdown_rating_mix_and_trend() -> None:
+    from pulse.week_stats import theme_breakdown
+
+    def a(rid: str, tid: str, rating: int) -> dict:
+        return {"rid": rid, "theme_id": tid, "rating": rating}
+
+    assignments = [
+        a("n1", "t1", 1),
+        a("n2", "t1", 1),
+        a("n3", "t2", 5),
+        a("n4", "t2", 4),  # this week: 50/50
+        a("p1", "t1", 2),
+        a("p2", "t2", 3),
+        a("p3", "t2", 3),
+        a("p4", "t2", 3),  # prev: 25/75
+    ]
+    out = theme_breakdown(assignments, {"n1", "n2", "n3", "n4"}, {"p1", "p2", "p3", "p4"})
+    assert out["t1"]["rating_dist"] == [2, 0, 0, 0, 0]
+    assert out["t1"]["trend_pts"] == 25.0
+    assert out["t2"]["trend_pts"] == -25.0
+
+    no_prev = theme_breakdown(assignments, {"n1", "n3"}, set())
+    assert no_prev["t1"]["trend_pts"] is None
+    assert sum(sum(v["rating_dist"]) for v in theme_breakdown(assignments, None).values()) == 8

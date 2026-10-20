@@ -1,4 +1,5 @@
 import { SOURCE, pct } from "../api.js";
+import { RatingMix, TrendBadge } from "../components/ThemeStats.jsx";
 
 const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
 
@@ -54,7 +55,7 @@ export default function ThemesTab({ data, onGenerate }) {
           <thead>
             <tr>
               <th>Theme</th><th className="num">Reviews</th><th className="num">Share</th>
-              <th className="num">Avg ★</th><th className="num">1–2★</th>
+              <th>Trend</th><th className="num">Avg ★</th><th>★ mix</th><th className="num">1–2★</th>
               <th className="num">{SOURCE.play_store}</th><th className="num">{SOURCE.app_store}</th>
             </tr>
           </thead>
@@ -68,7 +69,9 @@ export default function ThemesTab({ data, onGenerate }) {
                 </td>
                 <td className="num">{t.review_count}</td>
                 <td className="num">{pct(t.share)}</td>
+                <td><TrendBadge theme={t} /></td>
                 <td className="num">{t.avg_rating.toFixed(2)}</td>
+                <td><RatingMix dist={t.rating_dist} /></td>
                 <td className="num">{pct(t.low_rating_share)}</td>
                 <td className="num">{t.by_source.play_store ?? 0}</td>
                 <td className="num">{t.by_source.app_store ?? 0}</td>

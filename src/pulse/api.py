@@ -37,7 +37,9 @@ from pulse.week_stats import (
     is_pulse_stale,
     option_label,
     posted_in_week,
+    previous_week,
     pulse_window_weeks,
+    theme_breakdown,
 )
 
 logger = get_logger("pulse.api")
@@ -231,6 +233,15 @@ def list_weeks() -> list[dict[str, Any]]:
     return [all_option, *weekly_items]
 
 
+def _with_breakdown(
+    items: list[dict[str, Any]], extras: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Attach each theme's star mix and week-over-week trend (matched by theme_id)."""
+    for t in items:
+        t.update(extras.get(t["theme_id"], {"rating_dist": [0] * 5, "trend_pts": None}))
+    return items
+
+
 @app.get("/api/weeks/{week}")
 def get_week(week: str) -> dict[str, Any]:
     _week(week)
@@ -255,14 +266,21 @@ def get_week(week: str) -> dict[str, Any]:
             )
         )
 
+        extras = theme_breakdown(store.load_assignments(pulse_week), None)
+        pulse_out = pulse.model_dump(mode="json") if pulse else None
+        if pulse_out:
+            _with_breakdown(pulse_out["top_themes"], extras)
+
         return {
             "week": "all",
             "label": f"All Reviews Till Now ({pulse.window_start} → {pulse.window_end} · "
             f"{pulse_window_weeks(pulse)}-Week Window)"
             if pulse
             else "All Reviews Till Now",
-            "pulse": pulse.model_dump(mode="json") if pulse else None,
-            "themes": [t.model_dump(mode="json") for t in themes] if themes else [],
+            "pulse": pulse_out,
+            "themes": _with_breakdown([t.model_dump(mode="json") for t in themes], extras)
+            if themes
+            else [],
             "manifest": manifest.model_dump(mode="json") if manifest else None,
             "eval_report": eval_report,
             "is_all": True,
@@ -337,10 +355,23 @@ def get_week(week: str) -> dict[str, Any]:
                     }
                 )
 
+    pulse_out = pulse.model_dump(mode="json") if pulse else None
+    # Star mix and week-over-week share change come from the newest pulse's assignments,
+    # which span its whole window (so the previous week is covered when it is inside it).
+    assignment_week = _latest_pulse_week(store) or week
+    extras = theme_breakdown(
+        store.load_assignments(assignment_week),
+        {r.rid for r in reviews},
+        {r.rid for r in posted_in_week(store, previous_week(week))},
+    )
+    _with_breakdown(themes_out, extras)
+    if pulse_out:
+        _with_breakdown(pulse_out["top_themes"], extras)
+
     return {
         "week": week,
         "label": format_week_human(week),
-        "pulse": pulse.model_dump(mode="json") if pulse else None,
+        "pulse": pulse_out,
         "themes": themes_out,
         "manifest": manifest.model_dump(mode="json") if manifest else None,
         "eval_report": eval_report,

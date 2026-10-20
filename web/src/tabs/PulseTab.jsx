@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { SOURCE, api, pct } from "../api.js";
 import Icon from "../components/Icon.jsx";
+import { RatingMix, TrendBadge } from "../components/ThemeStats.jsx";
 
 const THEME_CONFIG = [
   {
@@ -351,11 +352,7 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
                         >
                           {severity}
                         </span>
-                        {t.wow_delta != null && (
-                          <span className="theme-trend-badge">
-                            {t.wow_delta > 0 ? "▲" : t.wow_delta < 0 ? "▼" : "•"} {Math.abs(t.wow_delta).toFixed(1)} pts WoW
-                          </span>
-                        )}
+                        <TrendBadge theme={t} />
                       </div>
                       <p className="theme-def-text">{t.definition}</p>
                     </div>
@@ -372,6 +369,7 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
                       >
                         ☆ {t.avg_rating.toFixed(2)} avg
                       </span>
+                      <RatingMix dist={t.rating_dist} />
                       <span className="theme-chip-neg" style={{ color: cfg.rankColor }}>
                         {tLowPct}% negative (1–2★)
                       </span>

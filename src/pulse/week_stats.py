@@ -8,12 +8,14 @@ Two different numbers exist for a week and must not be mixed:
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
-from typing import Literal
+from collections import defaultdict
+from collections.abc import Iterable
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, Literal
 
 from pulse.models import CleanReview, Pulse
 from pulse.run_store import RunStore
-from pulse.utils.weeks import week_end_date, week_start_date
+from pulse.utils.weeks import date_to_iso_week, week_end_date, week_start_date
 
 SOURCES: tuple[Literal["play_store", "app_store"], ...] = ("play_store", "app_store")
 
@@ -35,6 +37,40 @@ def posted_in_week(store: RunStore, week: str) -> list[CleanReview]:
             seen.add(r.rid)
             unique.append(r)
     return unique
+
+
+def previous_week(week: str) -> str:
+    """The ISO week before `week`."""
+    return date_to_iso_week(week_start_date(week) - timedelta(days=1))
+
+
+def theme_breakdown(
+    assignments: Iterable[dict[str, Any]],
+    rids: set[str] | None,
+    prev_rids: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Per-theme star mix and week-over-week share change, from review assignments.
+
+    `rids` restricts the scope (None = every assignment). `rating_dist` is [n1..n5].
+    `trend_pts` is this scope's share minus `prev_rids`' share, in percentage points; it is
+    None when either side has no assigned reviews.
+    """
+    scoped = [a for a in assignments if rids is None or a["rid"] in rids]
+    prev = [a for a in assignments if prev_rids and a["rid"] in prev_rids]
+    dist: dict[str, list[int]] = defaultdict(lambda: [0] * 5)
+    for a in scoped:
+        dist[a["theme_id"]][a["rating"] - 1] += 1
+    prev_counts: dict[str, int] = defaultdict(int)
+    for a in prev:
+        prev_counts[a["theme_id"]] += 1
+
+    out: dict[str, dict[str, Any]] = {}
+    for tid, d in dist.items():
+        trend = None
+        if scoped and prev:
+            trend = round((sum(d) / len(scoped) - prev_counts[tid] / len(prev)) * 100, 1)
+        out[tid] = {"rating_dist": d, "trend_pts": trend}
+    return out
 
 
 def pulse_window_weeks(pulse: Pulse) -> int:
