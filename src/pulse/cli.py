@@ -367,6 +367,7 @@ def compose(
             run_store=run_store,
             llm_client=llm_client,
             dry_run=dry_run,
+            persist=not dry_run,  # --dry-run promises to leave the run directory untouched
         )
     except Exception as exc:
         rprint(f"[bold red]Composition failed:[/bold red] {exc}")

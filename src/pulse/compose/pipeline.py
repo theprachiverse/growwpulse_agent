@@ -51,6 +51,7 @@ def run_compose_pipeline(
     llm_client: LLMClient,
     dry_run: bool = False,
     max_repair_attempts: int = 2,
+    persist: bool = True,
 ) -> tuple[Pulse, ValidationReport]:
     """Execute complete Phase 4 pulse composition and guardrails validation workflow.
 
@@ -59,8 +60,10 @@ def run_compose_pipeline(
         config: Application configuration.
         run_store: Run artifact store.
         llm_client: Client for LLM completions.
-        dry_run: If True, skips disk persistence.
+        dry_run: Accepted for callers that pass the run's flag; a dry run still saves its pulse
+            (it only skips publishing). Use `persist` to skip writing to disk.
         max_repair_attempts: Max retry/shorten passes if validation checks fail.
+        persist: If False, nothing is written to the run directory (used by `pulse compose --dry-run`).
 
     Returns:
         tuple[Pulse, ValidationReport]: Generated pulse and guardrail validation report.
@@ -271,7 +274,9 @@ def run_compose_pipeline(
                 break
 
     # 11. Persistence
-    if report.passed:
+    if not persist:
+        logger.info("compose_persistence_skipped", week=week, passed=report.passed)
+    elif report.passed:
         run_store.save_pulse(week, pulse)
         run_store.save_eval_report(week, report.summary_dict())
         logger.info("pulse_and_eval_report_persisted", week=week)

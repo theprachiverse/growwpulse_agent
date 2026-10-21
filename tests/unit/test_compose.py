@@ -1109,3 +1109,29 @@ def test_word_limit_is_enforced_even_when_llm_shortening_does_nothing(tmp_path: 
     assert report.passed, report.hard_failures
     assert pulse.word_count <= 215
     assert [q.text for q in pulse.quotes] == [q.text for q in baseline.quotes]  # quotes untouched
+
+
+# --- persist=False leaves the run directory untouched (pulse compose --dry-run) ---
+
+
+def test_persist_false_writes_nothing_and_default_still_saves(tmp_path: Path):
+    store, week = _setup_pipeline_store(tmp_path)
+    run_dir = store.run_dir(week)
+
+    run_compose_pipeline(
+        week=week,
+        config=AppConfig(),
+        run_store=store,
+        llm_client=MockLLMClient(),
+        dry_run=True,
+        persist=False,
+    )
+    assert not (run_dir / "pulse.json").exists()
+    assert not (run_dir / "pulse.md").exists()
+    assert not (run_dir / "eval_report.json").exists()
+
+    # The orchestrator's dry run (persist left at its default) still saves the pulse.
+    run_compose_pipeline(
+        week=week, config=AppConfig(), run_store=store, llm_client=MockLLMClient(), dry_run=True
+    )
+    assert (run_dir / "pulse.json").exists() and (run_dir / "pulse.md").exists()
