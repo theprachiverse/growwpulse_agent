@@ -62,6 +62,14 @@ class LLMClient(Protocol):
         ...
 
 
+class LLMConfigError(RuntimeError):
+    """Groq rejected the request as unfixable by retrying (bad model name, key or permissions)."""
+
+
+class LLMOutputError(RuntimeError):
+    """The model's reply was not valid JSON (Groq 400 `json_validate_failed`); not fatal."""
+
+
 MAX_SERVER_WAIT_S = 70.0  # one rate-limit window plus margin
 TPM_WINDOW_S = 60.0
 PACE_CHARS_PER_TOKEN = 3.5  # deliberately pessimistic: over-estimating only delays a call
@@ -97,10 +105,12 @@ class GroqLocalEmbedClient:
         embed_dim: int = DEFAULT_COMPONENTS,
         budget: LLMBudget | None = None,
         reasoning_effort: str | None = None,
+        max_completion_tokens: int | None = None,
     ) -> None:
         self.api_key = api_key or ""
         self.budget = budget
         self.reasoning_effort = reasoning_effort
+        self.max_completion_tokens = max_completion_tokens
         self._window: deque[tuple[float, int]] = deque()  # (monotonic time, tokens) of recent calls
         self.chat_model = chat_model
         self.base_url = base_url.rstrip("/")
@@ -115,6 +125,21 @@ class GroqLocalEmbedClient:
     def fit_embeddings(self, texts: list[str]) -> None:
         """Fit the embedding space on the review corpus; later `embed` calls reuse it."""
         self.embedder.fit(texts)
+
+    def with_model(self, chat_model: str, budget: LLMBudget | None) -> GroqLocalEmbedClient:
+        """A sibling client on another Groq model with its own ledger; shares the embedder."""
+        other = GroqLocalEmbedClient(
+            api_key=self.api_key,
+            chat_model=chat_model,
+            base_url=self.base_url,
+            timeout_s=self.timeout_s,
+            max_retries=self.max_retries,
+            budget=budget,
+            reasoning_effort=self.reasoning_effort,
+            max_completion_tokens=self.max_completion_tokens,
+        )
+        other.embedder = self.embedder
+        return other
 
     def get_usage(self) -> dict[str, int]:
         return {
@@ -177,6 +202,8 @@ class GroqLocalEmbedClient:
         }
         if self.reasoning_effort and "gpt-oss" in self.chat_model:
             payload["reasoning_effort"] = self.reasoning_effort
+        if self.max_completion_tokens:
+            payload["max_completion_tokens"] = self.max_completion_tokens
 
         last_exc: Exception | None = None
         delay = 1.0
@@ -203,9 +230,21 @@ class GroqLocalEmbedClient:
                 # A spent daily quota will not recover within the retry window: fail fast.
                 if resp.status_code == 429 and "per day" in resp.text:
                     if self.budget is not None:
-                        self.budget.mark_exhausted(parse_retry_seconds(resp.text))
+                        self.budget.mark_exhausted(parse_retry_seconds(resp.text), resp.text)
                     raise DailyQuotaExceededError(
                         f"Groq daily token quota exhausted: {resp.text[:160]}"
+                    )
+
+                # JSON mode answers 400 when the model's reply is not valid JSON (or was cut off).
+                # Not a config problem: callers fall back instead of the run stopping, and
+                # repeating the identical request would only spend more tokens.
+                if resp.status_code == 400 and "json_validate_failed" in resp.text:
+                    raise LLMOutputError(f"Groq could not produce valid JSON: {resp.text[:200]}")
+
+                if resp.status_code in (400, 401, 403, 404):
+                    raise LLMConfigError(
+                        f"Groq rejected the request (HTTP {resp.status_code}) for model "
+                        f"'{self.chat_model}': {resp.text[:200]}"
                     )
 
                 # Retry on 429 rate limit or 5xx server errors
@@ -227,6 +266,8 @@ class GroqLocalEmbedClient:
 
                 resp.raise_for_status()
 
+            except (LLMConfigError, LLMOutputError):
+                raise
             except (httpx.RequestError, httpx.HTTPStatusError) as exc:
                 last_exc = exc
                 logger.warning(
@@ -393,6 +434,7 @@ def get_llm_client(
             max_retries=settings.app_config.llm.max_retries,
             budget=budget if budget is not None else budget_from_settings(settings),
             reasoning_effort=settings.app_config.llm.reasoning_effort,
+            max_completion_tokens=settings.app_config.llm.max_completion_tokens,
         )
     elif prov == "mock":
         return MockLLMClient()

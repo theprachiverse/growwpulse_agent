@@ -101,8 +101,14 @@ def residual_pass(
     min_capture: float,
     batch_size: int = 50,
     cache_dir: Path | str | None = None,
+    classify_client: LLMClient | None = None,
+    max_llm_reviews: int = 0,
 ) -> tuple[list[ThemeSpec], list[ReviewAssignment]]:
-    """Returns (themes, assignments); unchanged unless the residual theme is accepted."""
+    """Returns (themes, assignments); unchanged unless the residual theme is accepted.
+
+    `llm_client` names the new theme; re-sorting the 'other' bucket uses `classify_client`
+    (its own quota) when given, capped at `max_llm_reviews` (the rest fall back to centroids).
+    """
     share = other_share(assignments)
     if share <= threshold or len(themes) >= max_themes:
         return themes, assignments
@@ -128,10 +134,11 @@ def residual_pass(
         reviews=others,
         review_embeddings=other_embs,
         themes=extended,
-        llm_client=llm_client,
+        llm_client=classify_client or llm_client,
         batch_size=batch_size,
         request_delay_s=0.0,
         cache_dir=cache_dir,
+        max_llm_reviews=max_llm_reviews,
     )
     by_rid = {a.rid: a for a in redone}
     merged = [by_rid.get(a.rid, a) if a.theme_id == OTHER else a for a in assignments]

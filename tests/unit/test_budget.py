@@ -1,4 +1,4 @@
-"""Tests for the persistent daily LLM budget and its Groq-client integration."""
+"""Tests for the rolling LLM token budget and its Groq-client integration."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from pulse.llm.budget import (
     BudgetExceededError,
     DailyQuotaExceededError,
     LLMBudget,
+    parse_groq_used,
     parse_retry_seconds,
 )
 from pulse.llm.client import GroqLocalEmbedClient
@@ -48,15 +49,81 @@ def test_run_limit_is_enforced_and_remembered_across_instances(tmp_path: Path) -
         make(tmp_path, clock, max_runs_per_day=3).begin_run()
 
 
-def test_budget_resets_on_the_next_utc_day(tmp_path: Path) -> None:
+def test_runs_age_out_of_the_rolling_24h_window(tmp_path: Path) -> None:
     clock = Clock()
     b = make(tmp_path, clock, max_runs_per_day=1)
     b.begin_run()
-    with pytest.raises(BudgetExceededError):
+    clock.t += timedelta(hours=23)  # a UTC midnight has passed, but 24h have not
+    with pytest.raises(BudgetExceededError, match="last 24h"):
         b.begin_run()
-    clock.t += timedelta(days=1)
+    clock.t += timedelta(hours=1, seconds=1)
     b.begin_run()
     assert b.status()["runs_used"] == 1
+
+
+def test_tokens_refill_continuously_not_at_midnight(tmp_path: Path) -> None:
+    clock = Clock()
+    b = make(tmp_path, clock, daily_token_limit=240_000, safety_margin=1.0)  # 10k tokens/hour
+    b.begin_run()
+    b.record_tokens(100_000)
+    assert b.status()["tokens_used"] == 100_000
+    clock.t += timedelta(hours=3)
+    st = b.status()
+    assert st["tokens_used"] == 70_000  # 30k refilled; nothing special happened at 00:00
+    assert st["tokens_refill_per_hour"] == 10_000
+
+
+def test_status_says_when_the_next_run_fits(tmp_path: Path) -> None:
+    clock = Clock()
+    b = make(tmp_path, clock, daily_token_limit=240_000, safety_margin=1.0)  # 10k tokens/hour
+    b.begin_run()
+    b.record_tokens(230_000)  # the run's own cost (230k) is the next-run estimate; 10k are left
+    st = b.status()
+    # 230k needed - 10k left = 220k short -> 22h of refill at 10k/hour
+    assert st["next_run_possible_at"] == (clock.t + timedelta(hours=22)).isoformat()
+    with pytest.raises(BudgetExceededError, match="about 22h 0m"):
+        b.begin_run()
+    clock.t += timedelta(hours=22)
+    assert b.status()["next_run_possible_at"] is None
+
+
+def test_parse_groq_used() -> None:
+    msg = "on tokens per day (TPD): Limit 200000, Used 199124, Requested 6073. Please try again"
+    assert parse_groq_used(msg) == 199124
+    assert parse_groq_used("tokens per minute (TPM): Limit 8000, Used 7000") is None
+
+
+def test_ledger_adopts_the_usage_groq_reports_when_it_undercounted(tmp_path: Path) -> None:
+    clock = Clock()
+    b = make(tmp_path, clock, daily_token_limit=200_000)
+    b.begin_run()
+    b.record_tokens(132_576)  # what this ledger saw
+    msg = "tokens per day (TPD): Limit 200000, Used 199124, Requested 6073. try again in 37m25s"
+    b.mark_exhausted(retry_after_s=2245, groq_message=msg)
+    assert b.status()["tokens_used"] == 199_124  # Groq's own figure wins
+
+
+def test_legacy_day_based_ledger_is_carried_over(tmp_path: Path) -> None:
+    clock = Clock()  # 2026-10-20 09:00 UTC
+    legacy = {
+        "day": "2026-10-20",
+        "runs": 2,
+        "tokens": 50_000,
+        "current_run_tokens": 5_000,
+        "run_tokens": [49_000],
+        "blocked_until": None,
+    }
+    (tmp_path / "llm_budget.json").write_text(json.dumps(legacy), encoding="utf-8")
+    st = make(tmp_path, clock, max_runs_per_day=4).status()
+    assert st["runs_used"] == 2
+    assert 0 < st["tokens_used"] <= 50_000  # kept (net of any refill since the file was written)
+
+
+def test_a_previous_days_legacy_ledger_is_not_counted(tmp_path: Path) -> None:
+    legacy = {"day": "2026-10-19", "runs": 3, "tokens": 150_000, "run_tokens": []}
+    (tmp_path / "llm_budget.json").write_text(json.dumps(legacy), encoding="utf-8")
+    st = make(tmp_path, Clock()).status()
+    assert st["runs_used"] == 0 and st["tokens_used"] == 0
 
 
 def test_token_estimate_is_learned_from_recorded_usage(tmp_path: Path) -> None:
@@ -67,17 +134,17 @@ def test_token_estimate_is_learned_from_recorded_usage(tmp_path: Path) -> None:
     b.begin_run()
     b.record_tokens(60_000)
     # The next run is estimated from the last recorded one (60k), but only 40k is left.
-    with pytest.raises(BudgetExceededError, match="Not enough daily tokens"):
+    with pytest.raises(BudgetExceededError, match="Not enough tokens"):
         b.begin_run()
 
 
-def test_run_cut_short_by_the_daily_limit_does_not_block_the_next_day(tmp_path: Path) -> None:
-    """A run stopped at the limit records ~the whole allowance; after the reset it must still start."""
+def test_run_cut_short_by_the_limit_does_not_block_once_tokens_refill(tmp_path: Path) -> None:
+    """A run stopped at the limit records ~the whole allowance; once refilled it must still start."""
     clock = Clock()
     b = make(tmp_path, clock, daily_token_limit=200_000, safety_margin=0.9)
     b.begin_run()
     b.record_tokens(202_532)  # the aborted run overshot the 180k allowance
-    clock.t += timedelta(days=1)
+    clock.t += timedelta(days=1, hours=1)  # the bucket has fully drained
     b.begin_run()  # was: "Not enough daily tokens left: ~180,000 remaining, a run needs ~202,532"
     assert b.status()["estimated_run_tokens"] == 180_000
 
@@ -93,7 +160,7 @@ def test_default_estimate_used_before_any_history(tmp_path: Path) -> None:
     b = make(
         tmp_path, clock, daily_token_limit=50_000, safety_margin=1.0, default_run_tokens=60_000
     )
-    with pytest.raises(BudgetExceededError, match="Not enough daily tokens"):
+    with pytest.raises(BudgetExceededError, match="Not enough tokens"):
         b.begin_run()
 
 
@@ -109,11 +176,11 @@ def test_exhaustion_blocks_until_reset_hint_then_clears(tmp_path: Path) -> None:
     b.assert_available()
 
 
-def test_exhaustion_without_hint_blocks_until_midnight_utc(tmp_path: Path) -> None:
+def test_exhaustion_without_hint_blocks_for_an_hour(tmp_path: Path) -> None:
     clock = Clock()
     b = make(tmp_path, clock)
     b.mark_exhausted(None)
-    assert b.status()["blocked_until"].startswith("2026-10-21T00:00")
+    assert b.status()["blocked_until"] == (clock.t + timedelta(hours=1)).isoformat()
 
 
 def test_corrupt_ledger_is_treated_as_empty(tmp_path: Path) -> None:

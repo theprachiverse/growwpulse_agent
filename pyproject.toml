@@ -48,6 +48,7 @@ packages = ["src/pulse"]
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 markers = [

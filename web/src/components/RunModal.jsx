@@ -114,11 +114,23 @@ export default function RunModal({
   const perWeek = latest?.total_reviews && latest?.window_weeks ? latest.total_reviews / latest.window_weeks : null;
   const cm = budget?.cost_model;
   const estReviews = perWeek ? Math.round(perWeek * windowWeeks) : null;
-  const estCalls = estReviews ? Math.ceil(estReviews / batchSize) : null;
-  const estTokens = estReviews && cm ? cm.fixed + estReviews * cm.per_review + estCalls * cm.per_batch : null;
-  const estMinutes = estTokens && budget?.tokens_per_minute ? Math.ceil(estTokens / budget.tokens_per_minute) : null;
+  // With a separate classify model only a capped sample (plus the capped residual pass) reaches the LLM,
+  // and it is paid from that model's own ledger; the main ledger only covers discovery and compose.
+  const cl = budget?.classify;
+  const cap = (n, limit) => (limit > 0 ? Math.min(n, limit) : n);
+  const llmReviews = estReviews && cl ? cap(estReviews, cl.max_reviews) + cl.max_residual_reviews : estReviews;
+  const estCalls = llmReviews ? Math.ceil(llmReviews / batchSize) : null;
+  const classifyTokens = llmReviews && cm ? llmReviews * cm.per_review + estCalls * cm.per_batch : null;
+  const estTokens = classifyTokens != null ? cm.fixed + classifyTokens : null;
+  const pacedTpm = cl?.tokens_per_minute || budget?.tokens_per_minute;
+  const estMinutes = classifyTokens && pacedTpm ? Math.ceil(classifyTokens / pacedTpm) : null;
   const need = estTokens ?? budget?.estimated_run_tokens;
-  const lowTokens = budget && !blocked && budget.tokens_remaining < need;
+  const lowTokens =
+    budget && !blocked &&
+    (cl
+      ? budget.tokens_remaining < Math.max(cm?.fixed ?? 0, budget.estimated_run_tokens) ||
+        (classifyTokens != null && cl.tokens_remaining < classifyTokens)
+      : budget.tokens_remaining < need);
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -151,13 +163,14 @@ export default function RunModal({
             {quotaBlocked
               ? `Groq's daily quota is exhausted until ${new Date(budget.blocked_until).toLocaleString()}.`
               : `Daily run limit reached (${budget.runs_used}/${budget.runs_max}).`}{" "}
-            Classification progress is cached, so a run after the 00:00 UTC reset resumes where the last one stopped.
+            Classification progress is cached. Groq refills tokens continuously, so a later run resumes where the last one stopped.
           </div>
         )}
         {lowTokens && (
           <div className="banner warn" style={{ marginBottom: 12 }}>
             An uncached run needs ~{need.toLocaleString()} tokens but only{" "}
-            {budget.tokens_remaining.toLocaleString()} are left today. The run will classify what it can, save its
+            {(cl ? Math.min(budget.tokens_remaining, cl.tokens_remaining) : budget.tokens_remaining).toLocaleString()}{" "}
+            are left today on one of the models. The run will classify what it can, save its
             progress, and finish on the next run. A shorter window or bigger batches lower the cost.
           </div>
         )}
@@ -261,8 +274,9 @@ export default function RunModal({
                 <strong>~{k(estTokens)} tokens</strong> · {estCalls} LLM calls · ~{estMinutes} min at Groq's free rate
                 limit
                 <br />
-                {k(budget.tokens_remaining)} of {k(budget.tokens_allowance)} left today · runs {budget.runs_used}/
-                {budget.runs_max}
+                {k(budget.tokens_remaining)} of {k(budget.tokens_allowance)} left today
+                {cl && <> (classify model: {k(cl.tokens_remaining)} of {k(cl.tokens_allowance)})</>} · runs{" "}
+                {budget.runs_used}/{budget.runs_max}
               </>
             ) : (
               <>

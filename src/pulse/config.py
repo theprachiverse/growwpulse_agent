@@ -204,6 +204,23 @@ class BudgetConfig(BaseModel):
     est_fixed_tokens: int = Field(default=30_000, ge=0)  # theme discovery, residual, compose
 
 
+class ClassifyLLMConfig(BaseModel):
+    """Optional second Groq model for per-review classification (its own daily quota/ledger)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = None  # None = classify with `model_chat`
+    daily_token_limit: int = Field(default=500_000, gt=0)
+    tokens_per_minute: int = Field(default=6_000, ge=0)
+    safety_margin: float = Field(default=0.9, gt=0.0, le=1.0)
+    max_reviews_per_run: int = Field(
+        default=0, ge=0, description="Cap on fresh reviews sent to the LLM per run (0 = no cap)"
+    )
+    max_residual_reviews: int = Field(
+        default=0, ge=0, description="Same cap for the residual pass over 'other' (0 = no cap)"
+    )
+
+
 class LLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -214,8 +231,10 @@ class LLMConfig(BaseModel):
     max_retries: int = Field(default=4, ge=0)
     # gpt-oss reasons before answering and bills those tokens; "low" keeps classification cheap.
     reasoning_effort: Literal["low", "medium", "high"] | None = "low"
+    max_completion_tokens: int | None = Field(default=None, gt=0)  # per-call reply cap
     temperature: LLMTemperatures = Field(default_factory=LLMTemperatures)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
+    classify: ClassifyLLMConfig = Field(default_factory=ClassifyLLMConfig)
 
 
 class PublishConfig(BaseModel):

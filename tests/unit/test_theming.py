@@ -1,5 +1,6 @@
 """Unit tests for Phase 3: Theming (clustering, discovery, classification, ranking)."""
 
+import re
 from datetime import date
 from pathlib import Path
 
@@ -581,3 +582,44 @@ def test_classification_cache_skips_reviews_llm_dropped(tmp_path):
     out = _classify(reviews, themes, centroids, retry, tmp_path)
     assert retry.get_usage()["llm_calls"] == 1
     assert [a.theme_id for a in out] == ["t1", "t2"]
+
+
+def test_classify_caps_llm_reviews_and_falls_back_to_centroids() -> None:
+    from datetime import date
+
+    from pulse.models import CleanReview
+    from pulse.theming.classify import classify_reviews
+    from pulse.theming.models import BatchClassificationResult, ThemeSpec
+
+    reviews = [
+        CleanReview(
+            rid=f"rid_{i:04d}",
+            source="play_store",
+            rating=3,
+            clean_text=f"review {i} about the app",
+            date=date(2026, 10, 10),
+            iso_week="2026-W41",
+        )
+        for i in range(100)
+    ]
+    embs = [[1.0, 0.0] for _ in reviews]
+    themes = [ThemeSpec(theme_id="t1", name="Trading", definition="Trading issues.")]
+
+    class CountingLLM:
+        seen = 0
+
+        def complete_json(self, prompt, schema, temperature=0.0, **_):
+            assert schema is BatchClassificationResult
+            n = len(re.findall(r'^\d+\. "review ', prompt, re.M))
+            CountingLLM.seen += n
+            items = [{"rid": str(i + 1), "theme_id": "t1"} for i in range(n)]
+            return BatchClassificationResult.model_validate({"items": items})
+
+        def embed(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+    out = classify_reviews(
+        reviews, embs, themes, CountingLLM(), batch_size=25, request_delay_s=0.0, max_llm_reviews=40
+    )
+    assert len(out) == 100  # every review still gets exactly one assignment
+    assert CountingLLM.seen == 40  # only the capped sample reached the LLM

@@ -128,3 +128,40 @@ def test_no_theme_found_or_llm_failure_keeps_original() -> None:
     assert residual_pass(
         reviews, embs, themes, assignments, boom, max_themes=5, threshold=0.15, min_capture=0.03
     ) == (themes, assignments)
+
+
+class CountingLLM(ScriptedLLM):
+    """ScriptedLLM that also counts classification calls and the reviews they carried."""
+
+    def __init__(self, proposal: ResidualThemeResult, truth: dict[str, str]) -> None:
+        super().__init__(proposal, truth)
+        self.classify_calls = 0
+        self.reviews_seen = 0
+
+    def complete_json(self, prompt: str, schema: Any, temperature: float = 0.0, **_: Any) -> Any:
+        if schema is BatchClassificationResult:
+            self.classify_calls += 1
+            self.reviews_seen += len(re.findall(r'^\d+\. "review number', prompt, re.M))
+        return super().complete_json(prompt, schema, temperature)
+
+
+def test_reclassification_uses_classify_client_and_cap() -> None:
+    reviews, embs, themes, assignments, truth = _setup(n_total=200, n_other=100, n_mf=50)
+    heavy = CountingLLM(_proposal(), truth)
+    cheap = CountingLLM(_proposal(), truth)
+    residual_pass(
+        reviews,
+        embs,
+        themes,
+        assignments,
+        heavy,
+        max_themes=5,
+        threshold=0.15,
+        min_capture=0.03,
+        batch_size=25,
+        classify_client=cheap,
+        max_llm_reviews=50,
+    )
+    assert heavy.discovery_calls == 1  # the heavy model only names the theme
+    assert heavy.classify_calls == 0  # none of its quota goes to re-sorting 'other'
+    assert cheap.reviews_seen == 50  # capped; the other 50 use centroid fallback

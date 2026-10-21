@@ -173,3 +173,37 @@ def test_server_retry_wait_parses_header_and_message() -> None:
         _server_retry_wait(httpx.Response(429, headers={"retry-after": "9999"}, text=""))
         == MAX_SERVER_WAIT_S
     )
+
+
+@respx.mock
+def test_malformed_json_400_is_not_fatal_and_not_retried() -> None:
+    """Groq answers 400 json_validate_failed for a bad reply; classification must fall back, not stop."""
+    from pulse.llm.client import GroqLocalEmbedClient, LLMConfigError, LLMOutputError
+    from pulse.theming.models import ClassificationItem
+
+    route = respx.post("https://groq.test/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            400,
+            json={"error": {"code": "json_validate_failed", "message": "Failed to generate JSON."}},
+        )
+    )
+    client = GroqLocalEmbedClient(api_key="k", base_url="https://groq.test/v1")
+    with pytest.raises(LLMOutputError) as caught:
+        client.complete_json("hi", ClassificationItem)
+    assert not isinstance(caught.value, LLMConfigError)
+    assert route.call_count == 1  # repeating the identical request would only burn tokens
+
+
+@respx.mock
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_config_errors_stop_immediately(status: int) -> None:
+    from pulse.llm.client import GroqLocalEmbedClient, LLMConfigError
+    from pulse.theming.models import ClassificationItem
+
+    route = respx.post("https://groq.test/v1/chat/completions").mock(
+        return_value=httpx.Response(status, json={"error": {"code": "model_not_found"}})
+    )
+    client = GroqLocalEmbedClient(api_key="k", base_url="https://groq.test/v1")
+    with pytest.raises(LLMConfigError):
+        client.complete_json("hi", ClassificationItem)
+    assert route.call_count == 1

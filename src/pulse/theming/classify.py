@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pulse.llm.budget import BudgetExceededError
+from pulse.llm.client import LLMConfigError
 from pulse.models import CleanReview
 from pulse.observability.logging import get_logger
 from pulse.theming.cache import ClassificationCache, fingerprint, review_key
@@ -155,6 +156,7 @@ def classify_reviews(
     batch_size: int = 50,
     request_delay_s: float = 0.2,
     cache_dir: Path | str | None = None,
+    max_llm_reviews: int = 0,
 ) -> list[ReviewAssignment]:
     """Classify all cleaned reviews into themes with 1-to-1 guarantee and centroid fallback.
 
@@ -200,6 +202,11 @@ def classify_reviews(
             if hit is not None:
                 item_map[r.rid] = hit
     todo = [r for r in reviews if r.rid not in item_map]
+    if max_llm_reviews > 0 and len(todo) > max_llm_reviews:
+        # Evenly spaced sample; the rest fall back to nearest-theme-centroid assignment.
+        step = len(todo) / max_llm_reviews
+        todo = [todo[int(i * step)] for i in range(max_llm_reviews)]
+        logger.info("classification_sampled", sent_to_llm=len(todo), cap=max_llm_reviews)
 
     total = len(reviews)
     n_batches = (len(todo) + batch_size - 1) // batch_size
@@ -215,7 +222,7 @@ def classify_reviews(
         batch = todo[b_idx * batch_size : (b_idx + 1) * batch_size]
         try:
             fresh = classify_batch_with_llm(batch, themes, llm_client, system_prompt)
-        except BudgetExceededError:
+        except (BudgetExceededError, LLMConfigError):
             if cache is not None:
                 cache.save()  # keep the progress made before the budget ran out
             raise

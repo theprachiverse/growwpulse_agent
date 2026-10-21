@@ -40,7 +40,7 @@ def test_no_runs_yet(data_dir: Path) -> None:
     assert body["last_run"] is None
     assert body["job"]["state"] in {"idle", "done", "failed", "running"}
     assert body["budget"]["runs_used"] == 0
-    assert body["budget"]["runs_max"] == 4
+    assert body["budget"]["runs_max"] == 3
     assert body["budget"]["tokens_allowance"] == 180_000
     assert set(body["budget"]["cost_model"]) == {"per_review", "per_batch", "fixed"}
 
@@ -82,3 +82,18 @@ def test_budget_hidden_on_read_only_deployments(
 ) -> None:
     monkeypatch.setenv("PULSE_READ_ONLY", "1")
     assert TestClient(app).get("/api/status").json()["budget"] is None
+
+
+def test_status_reports_the_classify_ledger_separately(data_dir: Path) -> None:
+    budget = TestClient(app).get("/api/status").json()["budget"]
+    classify = budget["classify"]
+    assert classify["model"] == "openai/gpt-oss-20b"
+    assert classify["tokens_allowance"] == 180_000
+    assert classify["max_reviews"] == 500
+    assert classify["max_residual_reviews"] == 250
+
+
+def test_classify_run_estimate_comes_from_the_caps_not_the_days_spend(data_dir: Path) -> None:
+    body = TestClient(app).get("/api/status").json()["budget"]
+    # (500 + 250 reviews) * 56 + 15 batches * 1300
+    assert body["classify"]["estimated_run_tokens"] == 750 * 56 + 15 * 1300

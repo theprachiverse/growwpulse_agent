@@ -27,7 +27,7 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 from pulse.compose.pipeline import run_compose_pipeline
 from pulse.config import get_settings
 from pulse.ingest.fetcher import AllSourcesFailedError, build_sources, fetch_all
-from pulse.llm.budget import BudgetExceededError, budget_from_settings
+from pulse.llm.budget import BudgetExceededError, budget_status
 from pulse.llm.client import get_llm_client
 from pulse.models import Source
 from pulse.observability.logging import configure_logging, get_logger
@@ -93,20 +93,29 @@ def config() -> None:
 
 @app.command()
 def budget() -> None:
-    """Show today's remembered Groq budget (runs and tokens used; resets 00:00 UTC)."""
-    ledger = budget_from_settings(get_settings())
-    if ledger is None:
+    """Show the remembered Groq budget (runs in the last 24h, tokens used; refills continuously)."""
+    st = budget_status(get_settings())
+    if st is None:
         rprint("LLM budget tracking is disabled (llm.budget.enabled: false).")
         return
-    st = ledger.status()
     table = Table(title=f"LLM budget — {st['day']} (UTC)")
     table.add_column("Item", style="cyan", no_wrap=True)
     table.add_column("Value", style="magenta")
     table.add_row("Runs", f"{st['runs_used']} / {st['runs_max']}")
-    table.add_row("Tokens used", f"{st['tokens_used']:,} / {st['tokens_allowance']:,}")
-    table.add_row("Tokens remaining", f"{st['tokens_remaining']:,}")
-    table.add_row("Estimated tokens per run", f"{st['estimated_run_tokens']:,}")
-    table.add_row("Blocked until", st["blocked_until"] or "—")
+    table.add_row("Heavy model: tokens used", f"{st['tokens_used']:,} / {st['tokens_allowance']:,}")
+    table.add_row("Heavy model: tokens remaining", f"{st['tokens_remaining']:,}")
+    table.add_row("Heavy model: estimated per run", f"{st['estimated_run_tokens']:,}")
+    table.add_row("Heavy model: next run fits at", st["next_run_possible_at"] or "now")
+    table.add_row("Heavy model: blocked until", st["blocked_until"] or "—")
+    cl = st.get("classify")
+    if cl:
+        table.add_row(
+            f"Classify ({cl['model']}): tokens used",
+            f"{cl['tokens_used']:,} / {cl['tokens_allowance']:,}",
+        )
+        table.add_row("Classify: tokens remaining", f"{cl['tokens_remaining']:,}")
+        table.add_row("Classify: next run fits at", cl["next_run_possible_at"] or "now")
+        table.add_row("Classify: blocked until", cl["blocked_until"] or "—")
     console.print(table)
 
 

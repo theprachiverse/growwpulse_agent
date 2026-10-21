@@ -41,6 +41,21 @@ def get_previous_week_string(week: str) -> str:
     return date_to_iso_week(prev_monday)
 
 
+def _classification_client(config: AppConfig, run_store: RunStore, llm_client: LLMClient):  # type: ignore[no-untyped-def]
+    """The client for per-review classification: a second Groq model with its own quota, if set."""
+    from pulse.llm.budget import classify_budget
+    from pulse.llm.client import GroqLocalEmbedClient
+
+    model = config.llm.classify.model
+    if not model or not isinstance(llm_client, GroqLocalEmbedClient):
+        return llm_client
+    if model == llm_client.chat_model:
+        return llm_client
+    budget = classify_budget(config.llm, run_store.base_dir)
+    logger.info("classification_model_split", model=model)
+    return llm_client.with_model(model, budget)
+
+
 def run_theming_pipeline(
     week: str,
     config: AppConfig,
@@ -109,13 +124,15 @@ def run_theming_pipeline(
     )
 
     # 6. Batched Classification with Centroid Fallback (3.3)
+    classify_client = _classification_client(config, run_store, llm_client)
     assignments = classify_reviews(
         reviews=reviews,
         review_embeddings=embeddings,
         themes=discovered_specs,
-        llm_client=llm_client,
+        llm_client=classify_client,
         batch_size=batch_size,
         cache_dir=cache_dir,
+        max_llm_reviews=config.llm.classify.max_reviews_per_run,
     )
 
     # 6b. Residual pass: recover a missed product domain from a large 'other' bucket
@@ -131,6 +148,8 @@ def run_theming_pipeline(
             min_capture=config.theming.residual_min_capture,
             batch_size=batch_size,
             cache_dir=cache_dir,
+            classify_client=classify_client,
+            max_llm_reviews=config.llm.classify.max_residual_reviews,
         )
 
     # 7. Multi-dimensional Ranking & Trend Tracking (3.4)

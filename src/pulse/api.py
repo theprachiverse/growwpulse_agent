@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from pulse import ui_service
 from pulse.config import get_settings
-from pulse.llm.budget import budget_from_settings
+from pulse.llm.budget import budget_status
 from pulse.observability.logging import get_logger
 from pulse.publish.errors import PublishError
 from pulse.run_store import RunStore
@@ -494,11 +494,10 @@ def live_status() -> dict[str, Any]:
                     "finished_at": finished,
                 }
 
-    ledger = None if _read_only() else budget_from_settings(get_settings())
     return {
         "job": ui_service.job_status(),
         "last_run": last_run,
-        "budget": ledger.status() if ledger else None,
+        "budget": None if _read_only() else budget_status(get_settings()),
     }
 
 

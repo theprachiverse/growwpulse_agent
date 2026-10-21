@@ -51,13 +51,19 @@ function budgetPill(b) {
   const left = `${Math.round(b.tokens_remaining / 1000)}k`;
   const total = `${Math.round(b.tokens_allowance / 1000)}k`;
   const blocked = Boolean(b.blocked_until) || b.runs_used >= b.runs_max;
-  const low = b.tokens_remaining < b.estimated_run_tokens;
+  const c = b.classify;
+  const low =
+    b.tokens_remaining < b.estimated_run_tokens || Boolean(c && c.tokens_remaining < c.estimated_run_tokens);
   return {
     warn: blocked || low,
-    text: `Runs ${b.runs_used}/${b.runs_max} · ${left}/${total} tokens left`,
+    text: `Runs ${b.runs_used}/${b.runs_max} · ${left}/${total} tokens left` +
+      (c ? ` · classify ${Math.round(c.tokens_remaining / 1000)}k` : ""),
     title:
-      `Today (UTC): ${b.tokens_used.toLocaleString()} of ${b.tokens_allowance.toLocaleString()} tokens used, ` +
+      `Last 24h: ${b.tokens_used.toLocaleString()} of ${b.tokens_allowance.toLocaleString()} tokens used ` +
+      `(refills ~${Math.round((b.tokens_refill_per_hour ?? 0) / 1000)}k/hour), ` +
       `a run needs ~${b.estimated_run_tokens.toLocaleString()}.` +
+      (c ? ` Classify model (${c.model}): ${c.tokens_used.toLocaleString()} of ${c.tokens_allowance.toLocaleString()} used.` : "") +
+      (b.next_run_possible_at ? ` Next run fits at ${new Date(b.next_run_possible_at).toLocaleTimeString()}.` : "") +
       (b.blocked_until ? ` Groq quota exhausted until ${new Date(b.blocked_until).toLocaleString()}.` : ""),
   };
 }

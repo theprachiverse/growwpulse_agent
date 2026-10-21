@@ -58,17 +58,29 @@ llm:
   timeout_s: 60
   max_retries: 6
   reasoning_effort: low        # gpt-oss bills its hidden reasoning; low is plenty for classify/compose
+  max_completion_tokens: 4000  # hard cap per reply (bounds hidden reasoning + JSON output)
   temperature:
     classify: 0.0
     compose: 0.4
-  # Sized for Groq's FREE tier on gpt-oss-120b (200k tokens/day, 8k tokens/min, no card needed).
-  # Remembered across runs in <data_dir>/llm_budget.json; resets 00:00 UTC.
+  # Per-review classification (the bulk of tokens) runs on a second Groq model with its own
+  # daily quota and ledger (<data_dir>/llm_budget_classify.json). Verify limits for your account at
+  # https://console.groq.com/docs/rate-limits and adjust. Set `model: null` to use model_chat.
+  classify:
+    model: openai/gpt-oss-20b   # must appear in GET https://api.groq.com/openai/v1/models for your key
+    daily_token_limit: 200000
+    tokens_per_minute: 8000
+    safety_margin: 0.9
+    max_reviews_per_run: 500    # fresh reviews sent to the LLM per run; others use centroid fallback (0 = no cap)
+    max_residual_reviews: 250   # same cap for the residual pass over the 'other' bucket (0 = no cap)
+  # Budget below covers only gpt-oss-120b: theme discovery, residual naming, compose (~20-30k/run).
+  # Remembered across runs in <data_dir>/llm_budget.json. Groq refills tokens continuously (a rolling
+  # 24h bucket, ~8.3k/hour per 200k/day), so the ledger does too: there is no midnight reset.
   budget:
     enabled: true
-    max_runs_per_day: 4        # 1 cold run (~150k) + a few cache-warm re-runs (dry run, retry, publish)
+    max_runs_per_day: 3        # classify model fits ~3 cold runs/day (~55-60k each); cache-warm re-runs are cheap
     daily_token_limit: 200000  # Groq free-tier tokens-per-day for gpt-oss-120b
     safety_margin: 0.9         # plan to use at most 90% of the limit (180k)
-    default_run_tokens: 150000 # cold-run estimate until real runs are recorded (then learned)
+    default_run_tokens: 30000  # heavy-model estimate until real runs are recorded (then learned)
     tokens_per_minute: 8000    # Groq free-tier TPM: calls are paced under it instead of hitting 429s
     est_tokens_per_review: 56  # UI estimate: tokens per review classified (prompt + reply)
     est_tokens_per_batch: 1300 # UI estimate: prompt overhead + reasoning per classification call
