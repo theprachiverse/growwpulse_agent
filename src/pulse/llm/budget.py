@@ -104,8 +104,16 @@ class LLMBudget:
         return self.config.daily_token_limit / DAY_SECONDS
 
     def _migrate_legacy(self, raw: dict[str, Any], state: dict[str, Any], now: datetime) -> None:
-        """Older ledgers counted tokens/runs per UTC day; carry today's figures over once."""
-        if "used_at" in raw or raw.get("day") != now.date().isoformat():
+        """Older ledgers counted tokens/runs per UTC day; carry today's figures over once.
+
+        Their learned per-run costs came from the one-model design (a run cost ~200k, the whole
+        allowance), so they are dropped: kept, they would block every run until the bucket drained.
+        """
+        if "used_at" in raw:
+            return
+        state["run_tokens"] = []
+        state["current_run_tokens"] = 0
+        if raw.get("day") != now.date().isoformat():
             return
         try:
             stamp = datetime.fromtimestamp(self.path.stat().st_mtime, UTC)

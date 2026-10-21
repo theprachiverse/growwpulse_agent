@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -288,3 +289,25 @@ def test_client_fails_fast_and_remembers_when_groq_daily_quota_is_gone(tmp_path:
     with pytest.raises(DailyQuotaExceededError):
         client.complete_json("hi", ClassificationItem)
     assert route.call_count == 1
+
+
+def test_old_ledger_that_learned_a_200k_run_does_not_block_a_cheaper_run(tmp_path: Path) -> None:
+    """The live ledger had recorded a 202k run (one-model design); a ~30k run must be allowed."""
+    clock = Clock()  # 2026-10-20 09:00 UTC
+    legacy = {
+        "day": "2026-10-20",
+        "runs": 1,
+        "tokens": 202_532,
+        "current_run_tokens": 202_532,
+        "run_tokens": [49_000, 202_532],
+        "blocked_until": None,
+    }
+    path = tmp_path / "llm_budget.json"
+    path.write_text(json.dumps(legacy), encoding="utf-8")
+    old = clock.t - timedelta(hours=8)
+    os.utime(path, (old.timestamp(), old.timestamp()))  # written 8h ago: ~66k has refilled
+    b = make(tmp_path, clock, default_run_tokens=30_000)
+    st = b.status()
+    assert st["estimated_run_tokens"] == 30_000  # not the stale 180k
+    assert st["tokens_remaining"] >= 30_000
+    b.begin_run()  # was: "Not enough daily tokens left: ~-22,532 remaining ..."
