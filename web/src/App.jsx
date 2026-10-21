@@ -46,11 +46,12 @@ function runPill(status) {
 function budgetPill(b) {
   if (!b) return null;
   const left = `${Math.round(b.tokens_remaining / 1000)}k`;
+  const total = `${Math.round(b.tokens_allowance / 1000)}k`;
   const blocked = Boolean(b.blocked_until) || b.runs_used >= b.runs_max;
   const low = b.tokens_remaining < b.estimated_run_tokens;
   return {
     warn: blocked || low,
-    text: `Runs ${b.runs_used}/${b.runs_max} · ${left} tokens left`,
+    text: `Runs ${b.runs_used}/${b.runs_max} · ${left}/${total} tokens left`,
     title:
       `Today (UTC): ${b.tokens_used.toLocaleString()} of ${b.tokens_allowance.toLocaleString()} tokens used, ` +
       `a run needs ~${b.estimated_run_tokens.toLocaleString()}.` +
@@ -291,6 +292,7 @@ export default function App() {
         initialMode={runModalMode}
         weeks={weeks}
         health={health}
+        budget={status?.budget}
         onRunStarted={() => {
           refresh();
           setTab("run");

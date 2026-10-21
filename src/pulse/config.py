@@ -191,10 +191,17 @@ class BudgetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
-    max_runs_per_day: int = Field(default=3, ge=1)
-    daily_token_limit: int = Field(default=200_000, gt=0)  # Groq on_demand TPD for gpt-oss-120b
+    max_runs_per_day: int = Field(default=4, ge=1)
+    daily_token_limit: int = Field(default=200_000, gt=0)  # Groq free-tier TPD for gpt-oss-120b
     safety_margin: float = Field(default=0.9, gt=0.0, le=1.0)  # plan to use at most this share
-    default_run_tokens: int = Field(default=60_000, gt=0)  # estimate until real runs are recorded
+    default_run_tokens: int = Field(default=150_000, gt=0)  # estimate until real runs are recorded
+    tokens_per_minute: int = Field(
+        default=8_000, ge=0, description="Groq free-tier TPM; calls are paced under it (0 = off)"
+    )
+    # Cost model behind the UI's pre-run estimate (an uncached run; the cache only lowers it).
+    est_tokens_per_review: int = Field(default=56, gt=0)
+    est_tokens_per_batch: int = Field(default=1_300, gt=0)  # prompt overhead + reasoning per call
+    est_fixed_tokens: int = Field(default=30_000, ge=0)  # theme discovery, residual, compose
 
 
 class LLMConfig(BaseModel):
@@ -205,6 +212,8 @@ class LLMConfig(BaseModel):
     base_url: str = "https://api.groq.com/openai/v1"
     timeout_s: int = Field(default=60, gt=0)
     max_retries: int = Field(default=4, ge=0)
+    # gpt-oss reasons before answering and bills those tokens; "low" keeps classification cheap.
+    reasoning_effort: Literal["low", "medium", "high"] | None = "low"
     temperature: LLMTemperatures = Field(default_factory=LLMTemperatures)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
 
@@ -288,6 +297,8 @@ class Settings(BaseSettings):
 
     llm_provider: str = Field(default="groq", alias="LLM_PROVIDER")
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
+    # Overrides llm.model_chat, e.g. to move to another free model whose quota is still unspent.
+    llm_model: str | None = Field(default=None, alias="LLM_MODEL")
     pulse_recipient: str = Field(default="me@example.com", alias="PULSE_RECIPIENT")
     mcp_auth_token: str | None = Field(default=None, alias="MCP_AUTH_TOKEN")
     mcp_server_url: str | None = Field(default=None, alias="MCP_SERVER_URL")

@@ -38,19 +38,23 @@ class DiscoveredThemes(BaseModel):
     ]
 
 
+DEFAULT_CONFIDENCE = 0.9  # a clear match: the model omits `confidence` to save output tokens
+
+
 class ClassificationItem(BaseModel):
     """Classification result for an individual review within a batch."""
 
     model_config = ConfigDict(extra="forbid")
 
-    rid: str = Field(description="Pseudonymous review ID (e.g. rid_b8c7b88857)")
+    rid: str = Field(description="The review's number in the batch (or its pseudonymous review ID)")
     theme_id: str = Field(
         description="Assigned theme identifier (e.g. t1..t5) or 'other' if unclassified"
     )
     confidence: float = Field(
+        default=DEFAULT_CONFIDENCE,
         ge=0.0,
         le=1.0,
-        description="Model confidence score between 0.0 and 1.0",
+        description="Only set when unsure (below 0.5); omit for a clear match",
     )
 
 

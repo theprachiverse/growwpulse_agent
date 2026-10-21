@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -70,6 +71,23 @@ def test_token_estimate_is_learned_from_recorded_usage(tmp_path: Path) -> None:
         b.begin_run()
 
 
+def test_run_cut_short_by_the_daily_limit_does_not_block_the_next_day(tmp_path: Path) -> None:
+    """A run stopped at the limit records ~the whole allowance; after the reset it must still start."""
+    clock = Clock()
+    b = make(tmp_path, clock, daily_token_limit=200_000, safety_margin=0.9)
+    b.begin_run()
+    b.record_tokens(202_532)  # the aborted run overshot the 180k allowance
+    clock.t += timedelta(days=1)
+    b.begin_run()  # was: "Not enough daily tokens left: ~180,000 remaining, a run needs ~202,532"
+    assert b.status()["estimated_run_tokens"] == 180_000
+
+
+def test_status_exposes_the_cost_model_for_the_ui(tmp_path: Path) -> None:
+    st = make(tmp_path, Clock()).status()
+    assert st["tokens_per_minute"] == 8_000
+    assert set(st["cost_model"]) == {"per_review", "per_batch", "fixed"}
+
+
 def test_default_estimate_used_before_any_history(tmp_path: Path) -> None:
     clock = Clock()
     b = make(
@@ -121,6 +139,67 @@ def test_client_records_tokens_from_successful_calls(tmp_path: Path) -> None:
     )
     client.complete_json("hi", ClassificationItem)
     assert b.status()["tokens_used"] == 1000
+
+
+def _ok(tokens: int = 1000) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "choices": [{"message": {"content": '{"rid":"r","theme_id":"t1"}'}}],
+            "usage": {"prompt_tokens": tokens, "completion_tokens": 0},
+        },
+    )
+
+
+@respx.mock
+def test_reasoning_effort_is_sent_only_to_gpt_oss(tmp_path: Path) -> None:
+    route = respx.post("https://groq.test/v1/chat/completions").mock(return_value=_ok())
+    for model, expected in (("openai/gpt-oss-120b", "low"), ("llama-3.1-8b-instant", None)):
+        client = GroqLocalEmbedClient(
+            api_key="k",
+            chat_model=model,
+            base_url="https://groq.test/v1",
+            reasoning_effort="low",
+        )
+        client.complete_json("hi", ClassificationItem)
+        sent = json.loads(route.calls.last.request.content)
+        assert sent.get("reasoning_effort") == expected
+
+
+@respx.mock
+def test_calls_are_paced_under_the_tokens_per_minute_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = [0.0]
+    slept: list[float] = []
+
+    def fake_sleep(s: float) -> None:
+        slept.append(s)
+        now[0] += s
+
+    monkeypatch.setattr("pulse.llm.client.time.monotonic", lambda: now[0])
+    monkeypatch.setattr("pulse.llm.client.time.sleep", fake_sleep)
+    respx.post("https://groq.test/v1/chat/completions").mock(return_value=_ok(7_000))
+    b = make(tmp_path, Clock(), tokens_per_minute=8_000)
+    client = GroqLocalEmbedClient(api_key="k", base_url="https://groq.test/v1", budget=b)
+
+    client.complete_json("hi", ClassificationItem)  # 7k spent at t=0
+    assert slept == []
+    client.complete_json("hi", ClassificationItem)  # 7k + ~1k reserved for the reply > 8k
+    assert len(slept) == 1 and 59 < slept[0] < 61  # waits for the first call to leave the window
+    assert b.status()["tokens_used"] == 14_000
+
+
+@respx.mock
+def test_pacing_can_be_turned_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    slept: list[float] = []
+    monkeypatch.setattr("pulse.llm.client.time.sleep", slept.append)
+    respx.post("https://groq.test/v1/chat/completions").mock(return_value=_ok(7_000))
+    b = make(tmp_path, Clock(), tokens_per_minute=0)
+    client = GroqLocalEmbedClient(api_key="k", base_url="https://groq.test/v1", budget=b)
+    client.complete_json("hi", ClassificationItem)
+    client.complete_json("hi", ClassificationItem)
+    assert slept == []
 
 
 @respx.mock

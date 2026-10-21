@@ -102,16 +102,22 @@ def classify_batch_with_llm(
     """Execute LLM classification on a single batch of reviews."""
     themes_def = format_themes_definition(themes)
 
+    # Reviews go in as 1..N: a number costs far fewer tokens than "rid_fe33bbe292", in the prompt
+    # and again in every item of the reply. Real IDs are still accepted back (see below).
+    by_number = {str(i): r.rid for i, r in enumerate(batch, 1)}
+    valid_rids = set(by_number.values())
     reviews_text = "\n".join(
-        f'- ID: {r.rid} | Text: "{truncate_preview(r.clean_text, max_words=50, max_chars=300)}"'
-        for r in batch
+        f'{i}. "{truncate_preview(r.clean_text, max_words=50, max_chars=300)}"'
+        for i, r in enumerate(batch, 1)
     )
 
     user_prompt = (
-        f"Classify each of the following {len(batch)} reviews into exactly one theme_id or 'other':\n\n"
+        f"Classify each of the following {len(batch)} numbered reviews into exactly one theme_id "
+        f"or 'other':\n\n"
         f"{reviews_text}\n\n"
         f"Available theme IDs: {', '.join(t.theme_id for t in themes)}, or 'other'.\n"
-        "Output a valid JSON object matching the BatchClassificationResult schema."
+        "Output a valid JSON object matching the BatchClassificationResult schema; "
+        "`rid` is the review's number."
     )
 
     full_system = system_prompt.replace("{themes_definition}", themes_def)
@@ -125,9 +131,14 @@ def classify_batch_with_llm(
     valid_theme_ids = {t.theme_id for t in themes} | {"other"}
     item_map: dict[str, ClassificationItem] = {}
     for item in result.items:
+        rid = by_number.get(item.rid.strip().strip("[]#.")) or (
+            item.rid if item.rid in valid_rids else None
+        )
+        if rid is None:  # an invented number/ID: the review it meant gets the centroid fallback
+            continue
         t_id = item.theme_id if item.theme_id in valid_theme_ids else "other"
-        item_map[item.rid] = ClassificationItem(
-            rid=item.rid,
+        item_map[rid] = ClassificationItem(
+            rid=rid,
             theme_id=t_id,
             confidence=max(0.0, min(1.0, float(item.confidence))),
         )

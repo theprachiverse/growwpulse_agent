@@ -57,15 +57,22 @@ llm:
   base_url: https://api.groq.com/openai/v1
   timeout_s: 60
   max_retries: 6
+  reasoning_effort: low        # gpt-oss bills its hidden reasoning; low is plenty for classify/compose
   temperature:
     classify: 0.0
     compose: 0.4
-  budget:                      # remembered across runs in <data_dir>/llm_budget.json; resets 00:00 UTC
+  # Sized for Groq's FREE tier on gpt-oss-120b (200k tokens/day, 8k tokens/min, no card needed).
+  # Remembered across runs in <data_dir>/llm_budget.json; resets 00:00 UTC.
+  budget:
     enabled: true
-    max_runs_per_day: 3        # pipeline runs per day (dry runs count: they spend tokens too)
-    daily_token_limit: 200000  # Groq on_demand tokens-per-day for gpt-oss-120b
-    safety_margin: 0.9         # plan to use at most 90% of the limit
-    default_run_tokens: 60000  # per-run estimate until real runs are recorded (then learned)
+    max_runs_per_day: 4        # 1 cold run (~150k) + a few cache-warm re-runs (dry run, retry, publish)
+    daily_token_limit: 200000  # Groq free-tier tokens-per-day for gpt-oss-120b
+    safety_margin: 0.9         # plan to use at most 90% of the limit (180k)
+    default_run_tokens: 150000 # cold-run estimate until real runs are recorded (then learned)
+    tokens_per_minute: 8000    # Groq free-tier TPM: calls are paced under it instead of hitting 429s
+    est_tokens_per_review: 56  # UI estimate: tokens per review classified (prompt + reply)
+    est_tokens_per_batch: 1300 # UI estimate: prompt overhead + reasoning per classification call
+    est_fixed_tokens: 30000    # UI estimate: theme discovery, residual pass, quotes, actions
 
 publish:
   email_mode: draft          # draft (default, nothing is sent) | send | off

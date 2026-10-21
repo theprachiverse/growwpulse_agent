@@ -45,9 +45,13 @@ class ScriptedLLM:
             self.discovery_calls += 1
             return self.proposal
         assert schema is BatchClassificationResult
-        rids = dict.fromkeys(re.findall(r"rid_\d{4}", prompt.split("Available theme IDs")[0]))
+        # Reviews are numbered 1..N in the prompt; the text says which review it really is.
+        numbered = re.findall(
+            r'^(\d+)\. "review number (\d+)', prompt.split("Available theme IDs")[0], re.M
+        )
         items = [
-            {"rid": r, "theme_id": self.truth.get(r, "other"), "confidence": 0.9} for r in rids
+            {"rid": n, "theme_id": self.truth.get(f"rid_{int(i):04d}", "other")}
+            for n, i in numbered
         ]
         return BatchClassificationResult.model_validate({"items": items})
 

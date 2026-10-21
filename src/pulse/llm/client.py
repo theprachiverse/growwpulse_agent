@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections import deque
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 import httpx
@@ -62,6 +63,9 @@ class LLMClient(Protocol):
 
 
 MAX_SERVER_WAIT_S = 70.0  # one rate-limit window plus margin
+TPM_WINDOW_S = 60.0
+PACE_CHARS_PER_TOKEN = 3.5  # deliberately pessimistic: over-estimating only delays a call
+PACE_OUTPUT_RESERVE = 1_000  # tokens assumed for the reply when sizing a call
 
 
 def _server_retry_wait(resp: httpx.Response) -> float:
@@ -92,9 +96,12 @@ class GroqLocalEmbedClient:
         max_retries: int = 4,
         embed_dim: int = DEFAULT_COMPONENTS,
         budget: LLMBudget | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         self.api_key = api_key or ""
         self.budget = budget
+        self.reasoning_effort = reasoning_effort
+        self._window: deque[tuple[float, int]] = deque()  # (monotonic time, tokens) of recent calls
         self.chat_model = chat_model
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
@@ -122,6 +129,26 @@ class GroqLocalEmbedClient:
         self._tokens_completion = 0
         self._calls = 0
 
+    def _pace(self, messages: list[dict[str, str]]) -> None:
+        """Hold a call back until it fits Groq's tokens-per-minute limit (free tier: ~8k).
+
+        Sleeping here is cheaper than a 429, which would also burn a retry attempt.
+        """
+        limit = self.budget.config.tokens_per_minute if self.budget is not None else 0
+        if limit <= 0:
+            return
+        chars = sum(len(m["content"]) for m in messages)
+        need = min(int(chars / PACE_CHARS_PER_TOKEN) + PACE_OUTPUT_RESERVE, limit)
+        while True:
+            now = time.monotonic()
+            while self._window and now - self._window[0][0] >= TPM_WINDOW_S:
+                self._window.popleft()
+            if not self._window or sum(t for _, t in self._window) + need <= limit:
+                return
+            wait = TPM_WINDOW_S - (now - self._window[0][0]) + 0.1
+            logger.info("llm_paced_for_tpm", wait_s=round(wait, 1), need=need, limit=limit)
+            time.sleep(wait)
+
     def _call_groq(
         self,
         messages: list[dict[str, str]],
@@ -135,18 +162,21 @@ class GroqLocalEmbedClient:
 
         if self.budget is not None:
             self.budget.assert_available()
+        self._pace(messages)
 
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.chat_model,
             "messages": messages,
             "temperature": temperature,
             "response_format": {"type": "json_object"},
         }
+        if self.reasoning_effort and "gpt-oss" in self.chat_model:
+            payload["reasoning_effort"] = self.reasoning_effort
 
         last_exc: Exception | None = None
         delay = 1.0
@@ -164,10 +194,10 @@ class GroqLocalEmbedClient:
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),
                     }
+                    spent = token_info["prompt_tokens"] + token_info["completion_tokens"]
+                    self._window.append((time.monotonic(), spent))
                     if self.budget is not None:
-                        self.budget.record_tokens(
-                            token_info["prompt_tokens"] + token_info["completion_tokens"]
-                        )
+                        self.budget.record_tokens(spent)
                     return content, token_info
 
                 # A spent daily quota will not recover within the retry window: fail fast.
@@ -220,7 +250,7 @@ class GroqLocalEmbedClient:
         system_prompt: str | None = None,
     ) -> T:
         """Completes prompt, parses into `schema`, retrying once on parse failure."""
-        schema_json = json.dumps(schema.model_json_schema(), indent=2)
+        schema_json = json.dumps(schema.model_json_schema(), separators=(",", ":"))
         base_system = (
             "You are a helpful structured JSON assistant. Output valid JSON that strictly adheres "
             f"to the following JSON Schema:\n{schema_json}"
@@ -352,7 +382,7 @@ def get_llm_client(
     settings = get_settings()
     prov = (provider or settings.llm_provider).lower()
     key = api_key or settings.llm_api_key
-    c_model = chat_model or settings.app_config.llm.model_chat
+    c_model = chat_model or settings.llm_model or settings.app_config.llm.model_chat
 
     if prov in ("groq", "openai"):
         return GroqLocalEmbedClient(
@@ -362,6 +392,7 @@ def get_llm_client(
             timeout_s=float(settings.app_config.llm.timeout_s),
             max_retries=settings.app_config.llm.max_retries,
             budget=budget if budget is not None else budget_from_settings(settings),
+            reasoning_effort=settings.app_config.llm.reasoning_effort,
         )
     elif prov == "mock":
         return MockLLMClient()

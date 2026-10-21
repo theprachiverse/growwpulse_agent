@@ -256,6 +256,39 @@ def test_classify_reviews_with_completeness_and_fallback():
     assert assignments[2].rid == "rid_3"
 
 
+def test_classify_accepts_batch_numbers_and_omitted_confidence():
+    """The prompt numbers reviews 1..N; the reply uses those numbers and may skip confidence."""
+    reviews = [make_clean_review("rid_a"), make_clean_review("rid_b"), make_clean_review("rid_c")]
+    themes = [
+        ThemeSpec(theme_id="t1", name="Trading", definition="Trading issues"),
+        ThemeSpec(theme_id="t2", name="Support", definition="Customer support"),
+    ]
+    prompts: list[str] = []
+
+    class Numbered(MockLLMClient):
+        def complete_json(self, prompt, schema, temperature=0.0, system_prompt=None):
+            prompts.append(prompt)
+            return BatchClassificationResult.model_validate_json(
+                '{"items":[{"rid":"1","theme_id":"t2"},{"rid":"2","theme_id":"t1","confidence":0.8},'
+                '{"rid":"99","theme_id":"t1"}]}'  # 99 was never in the batch: ignored
+            )
+
+    out = classify_reviews(
+        reviews=reviews,
+        review_embeddings=[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        themes=themes,
+        llm_client=Numbered(),
+        theme_centroids={"t1": [1.0, 0.0], "t2": [0.0, 1.0]},
+        batch_size=10,
+        request_delay_s=0.0,
+    )
+
+    assert '\n1. "' in prompts[0] and "rid_a" not in prompts[0]  # short numbers, not real IDs
+    assert (out[0].rid, out[0].theme_id, out[0].confidence) == ("rid_a", "t2", 0.9)  # default
+    assert (out[1].rid, out[1].theme_id, out[1].confidence) == ("rid_b", "t1", 0.8)
+    assert out[2].rid == "rid_c"  # the model skipped it: centroid fallback, still classified
+
+
 def test_rank_themes_volume_vs_balanced():
     themes = [
         ThemeSpec(

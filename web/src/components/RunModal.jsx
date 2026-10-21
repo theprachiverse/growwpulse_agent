@@ -3,6 +3,16 @@ import { api } from "../api.js";
 
 const STEPS = ["", "ingest", "preprocess", "theming", "compose", "publish"];
 
+// 10 and 20 repeat the prompt overhead too often to fit the free daily budget; 100 can exceed
+// Groq's 8k tokens-per-minute cap on a single call.
+const BATCH_SIZES = [
+  [25, "25 (Safer on rate limits)"],
+  [50, "50 (Recommended)"],
+  [75, "75 (Fewest tokens)"],
+];
+
+const k = (n) => `${Math.round(n / 1000)}k`;
+
 // Convert YYYY-MM-DD to ISO 8601 week string (e.g. 2026-W43)
 export function dateToIsoWeek(dStr) {
   if (!dStr) return "";
@@ -21,6 +31,7 @@ export default function RunModal({
   initialMode = "auto",
   weeks = [],
   health,
+  budget,
   onRunStarted,
 }) {
   const currentW = health?.current_week || "2026-W43";
@@ -32,7 +43,7 @@ export default function RunModal({
   const [selectedWeek, setSelectedWeek] = useState(initialWeek || "auto");
   const [dateInput, setDateInput] = useState("");
   const [windowWeeks, setWindowWeeks] = useState(10);
-  const [batchSize, setBatchSize] = useState(25);
+  const [batchSize, setBatchSize] = useState(50);
   const [fromStep, setFromStep] = useState("");
   const [dryRun, setDryRun] = useState(true);
   const [err, setErr] = useState(null);
@@ -93,6 +104,22 @@ export default function RunModal({
 
   const targetWeekDisplay = getEffectiveWeek();
 
+  // Mirror the server's guardrail so the user hears about it before starting, not after a failed run.
+  const runsExhausted = budget && budget.runs_used >= budget.runs_max;
+  const quotaBlocked = budget && Boolean(budget.blocked_until);
+  const blocked = runsExhausted || quotaBlocked;
+
+  // Worst case (nothing cached): reviews in the chosen window, sent in batches of `batchSize`.
+  const latest = weeks.find((w) => w.week === "all");
+  const perWeek = latest?.total_reviews && latest?.window_weeks ? latest.total_reviews / latest.window_weeks : null;
+  const cm = budget?.cost_model;
+  const estReviews = perWeek ? Math.round(perWeek * windowWeeks) : null;
+  const estCalls = estReviews ? Math.ceil(estReviews / batchSize) : null;
+  const estTokens = estReviews && cm ? cm.fixed + estReviews * cm.per_review + estCalls * cm.per_batch : null;
+  const estMinutes = estTokens && budget?.tokens_per_minute ? Math.ceil(estTokens / budget.tokens_per_minute) : null;
+  const need = estTokens ?? budget?.estimated_run_tokens;
+  const lowTokens = budget && !blocked && budget.tokens_remaining < need;
+
   return (
     <div className="modal-bg" onClick={onClose}>
       <div
@@ -118,6 +145,22 @@ export default function RunModal({
         </div>
 
         {err && <div className="banner bad" style={{ marginBottom: 12 }}>{err}</div>}
+
+        {blocked && (
+          <div className="banner bad" style={{ marginBottom: 12 }}>
+            {quotaBlocked
+              ? `Groq's daily quota is exhausted until ${new Date(budget.blocked_until).toLocaleString()}.`
+              : `Daily run limit reached (${budget.runs_used}/${budget.runs_max}).`}{" "}
+            Classification progress is cached, so a run after the 00:00 UTC reset resumes where the last one stopped.
+          </div>
+        )}
+        {lowTokens && (
+          <div className="banner warn" style={{ marginBottom: 12 }}>
+            An uncached run needs ~{need.toLocaleString()} tokens but only{" "}
+            {budget.tokens_remaining.toLocaleString()} are left today. The run will classify what it can, save its
+            progress, and finish on the next run. A shorter window or bigger batches lower the cost.
+          </div>
+        )}
 
         <label style={{ fontWeight: 600 }}>Target Week / Date</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -200,14 +243,35 @@ export default function RunModal({
           <div>
             <label style={{ fontSize: 12 }}>Classification Batch Size</label>
             <select value={batchSize} onChange={(e) => setBatchSize(Number(e.target.value))}>
-              <option value={10}>10 (Fastest)</option>
-              <option value={20}>20</option>
-              <option value={25}>25 (Rec. for Groq)</option>
-              <option value={50}>50 (Default)</option>
-              <option value={100}>100 (Bulk)</option>
+              {BATCH_SIZES.map(([n, label]) => (
+                <option key={n} value={n}>{label}</option>
+              ))}
             </select>
           </div>
         </div>
+
+        {budget && (
+          <div
+            className={`banner ${estTokens && !lowTokens ? "info" : "warn"}`}
+            style={{ marginTop: 10, marginBottom: 0, fontSize: 12 }}
+            title="Worst case: assumes no review was classified before. Reviews already in the cache cost nothing."
+          >
+            {estTokens ? (
+              <>
+                <strong>~{k(estTokens)} tokens</strong> · {estCalls} LLM calls · ~{estMinutes} min at Groq's free rate
+                limit
+                <br />
+                {k(budget.tokens_remaining)} of {k(budget.tokens_allowance)} left today · runs {budget.runs_used}/
+                {budget.runs_max}
+              </>
+            ) : (
+              <>
+                {k(budget.tokens_remaining)} of {k(budget.tokens_allowance)} tokens left today · runs{" "}
+                {budget.runs_used}/{budget.runs_max}. A first full run uses about {k(budget.estimated_run_tokens)}.
+              </>
+            )}
+          </div>
+        )}
 
         <label style={{ fontSize: 12, marginTop: 10 }}>Resume from step (optional)</label>
         <select value={fromStep} onChange={(e) => setFromStep(e.target.value)}>
@@ -235,7 +299,7 @@ export default function RunModal({
           <button className="btn ghost" onClick={onClose} disabled={loading}>
             Cancel
           </button>
-          <button className="btn" onClick={start} disabled={loading}>
+          <button className="btn" onClick={start} disabled={loading || blocked}>
             {loading ? "Starting…" : `Start Pipeline for ${targetWeekDisplay}`}
           </button>
         </div>

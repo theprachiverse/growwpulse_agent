@@ -102,12 +102,15 @@ class LLMBudget:
     def token_allowance(self) -> int:
         return int(self.config.daily_token_limit * self.config.safety_margin)
 
-    @staticmethod
-    def _estimate(state: dict[str, Any], default: int) -> int:
+    def _estimate(self, state: dict[str, Any]) -> int:
         recent = [int(t) for t in state.get("run_tokens", [])[-3:]]
         if state.get("current_run_tokens", 0) > 0:  # the latest run is not in history yet
             recent.append(int(state["current_run_tokens"]))
-        return max(recent) if recent else default
+        if not recent:
+            return self.config.default_run_tokens
+        # A run cut short by the daily limit records about the whole allowance; learning that
+        # figure uncapped would make every later run look unaffordable, even after the reset.
+        return min(max(recent), self.token_allowance)
 
     def _blocked_until(self, state: dict[str, Any]) -> datetime | None:
         raw = state.get("blocked_until")
@@ -130,7 +133,13 @@ class LLMBudget:
             "tokens_used": used,
             "tokens_allowance": self.token_allowance,
             "tokens_remaining": max(0, self.token_allowance - used),
-            "estimated_run_tokens": self._estimate(state, self.config.default_run_tokens),
+            "estimated_run_tokens": self._estimate(state),
+            "tokens_per_minute": self.config.tokens_per_minute,
+            "cost_model": {
+                "per_review": self.config.est_tokens_per_review,
+                "per_batch": self.config.est_tokens_per_batch,
+                "fixed": self.config.est_fixed_tokens,
+            },
             "blocked_until": blocked.isoformat() if blocked else None,
         }
 
@@ -145,7 +154,7 @@ class LLMBudget:
                 f"Daily run limit reached ({state['runs']}/{self.config.max_runs_per_day}). "
                 "The budget resets at 00:00 UTC."
             )
-        estimate = self._estimate(state, self.config.default_run_tokens)
+        estimate = self._estimate(state)
         remaining = self.token_allowance - int(state["tokens"])
         if remaining < estimate:
             raise BudgetExceededError(

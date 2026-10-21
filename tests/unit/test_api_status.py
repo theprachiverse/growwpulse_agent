@@ -38,7 +38,9 @@ def test_no_runs_yet(data_dir: Path) -> None:
     assert body["last_run"] is None
     assert body["job"]["state"] in {"idle", "done", "failed", "running"}
     assert body["budget"]["runs_used"] == 0
-    assert body["budget"]["runs_max"] == 3
+    assert body["budget"]["runs_max"] == 4
+    assert body["budget"]["tokens_allowance"] == 180_000
+    assert set(body["budget"]["cost_model"]) == {"per_review", "per_batch", "fixed"}
 
 
 def test_last_run_is_the_most_recently_finished_not_the_latest_week(data_dir: Path) -> None:
