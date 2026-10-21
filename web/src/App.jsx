@@ -32,6 +32,9 @@ function runPill(status) {
   if (job?.state === "running") {
     return { dot: "warn", text: `Running ${job.week || ""} · started ${ago(job.started_at)}` };
   }
+  if (job?.state === "paused") {
+    return { dot: "warn", text: "Paused · token limit, progress saved", title: job.error };
+  }
   if (job?.state === "failed") return { dot: "bad", text: "Last run failed", title: job.error };
   const last = status?.last_run;
   if (!last) return { dot: "ok", text: "Idle · no runs yet" };

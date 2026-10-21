@@ -54,7 +54,12 @@ export default function RunTab({ week, weeks = [], data, health, onDone, onOpenM
         {job.state === "done" && (
           <div className="banner info" style={{ marginTop: 12 }}>Last run finished for {job.week}: <strong>{job.status}</strong>.</div>
         )}
-        {job.state === "failed" && <div className="banner bad" style={{ marginTop: 12 }}>Last run failed: {job.error}</div>}
+        {job.state === "paused" && (
+          <div className="banner warn" style={{ marginTop: 12 }}>
+            Paused by the token limit, not a failure: {job.error} Classified reviews are cached, so the next run resumes where this one stopped.
+          </div>
+        )}
+        {job.state === "failed" &&<div className="banner bad" style={{ marginTop: 12 }}>Last run failed: {job.error}</div>}
       </div>
 
       {!data ? (

@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from pulse import ui_service
 from pulse.api import app
+from pulse.llm.budget import BudgetExceededError
 from pulse.models import RunManifest
 from pulse.run_store import RunStore
 
@@ -54,6 +56,25 @@ def test_last_run_is_the_most_recently_finished_not_the_latest_week(data_dir: Pa
         "status": "error",
         "finished_at": "2026-10-19T23:00:00+00:00",
     }
+
+
+def test_token_limit_pauses_the_job_instead_of_failing_it(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def stop(**_: object) -> None:
+        raise BudgetExceededError("Daily token limit reached (202,532/200,000).")
+
+    monkeypatch.setattr("pulse.orchestrator.run_pipeline", stop)
+    ui_service._run_job({"week": "auto"})
+    job = TestClient(app).get("/api/status").json()["job"]
+    assert job["state"] == "paused" and "Daily token limit" in job["error"]
+
+    def boom(**_: object) -> None:
+        raise RuntimeError("real bug")
+
+    monkeypatch.setattr("pulse.orchestrator.run_pipeline", boom)
+    ui_service._run_job({"week": "auto"})
+    assert TestClient(app).get("/api/status").json()["job"]["state"] == "failed"
 
 
 def test_budget_hidden_on_read_only_deployments(

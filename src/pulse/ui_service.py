@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pulse.config import Settings, get_settings
+from pulse.llm.budget import BudgetExceededError
 from pulse.observability.logging import get_logger
 from pulse.publish.docs_publisher import doc_url_for
 from pulse.publish.validate import _EMAIL_RE, parse_doc_id, validate_publish_settings
@@ -155,6 +156,10 @@ def _run_job(kwargs: dict[str, Any]) -> None:
             step_timings=result.step_timings,
             finished_at=datetime.now(UTC).isoformat(),
         )
+    except BudgetExceededError as exc:
+        # Not a failure: classification progress is cached and the next run resumes from it.
+        logger.warning("run_paused_by_budget", error=str(exc))
+        _job.update(state="paused", error=str(exc), finished_at=datetime.now(UTC).isoformat())
     except Exception as exc:
         logger.error("run_failed", error=str(exc))
         _job.update(state="failed", error=str(exc), finished_at=datetime.now(UTC).isoformat())
