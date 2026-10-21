@@ -988,3 +988,124 @@ def test_shortening_targets_target_words_not_max(tmp_path: Path, monkeypatch):
     )
     assert seen and set(seen) == {60}
     assert pulse.word_count <= 250
+
+
+# --- Quotes must support the theme they are filed under ---
+
+
+def _quote_candidate(rid: str, theme_id: str, text: str) -> QuoteCandidate:
+    return QuoteCandidate(
+        rid=rid,
+        source="play_store",
+        theme_id=theme_id,
+        rating=1,
+        clean_text=text,
+        clean_title=None,
+        date=date(2026, 10, 14),
+        helpful_votes=1,
+        distance_to_centroid=0.1,
+        word_count=len(text.split()),
+    )
+
+
+class _MislabellingLLM:
+    """Files the customer-care review under the trading theme (the bug seen in the W42 pulse)."""
+
+    def complete_json(self, prompt, schema, temperature=0.0, **_):
+        from pulse.compose.models import QuoteSelectionResponse
+
+        def pick(theme_id, rid, end):
+            return {
+                "theme_id": theme_id,
+                "selected_span": {"rid": rid, "start_char": 0, "end_char": end},
+            }
+
+        return QuoteSelectionResponse.model_validate(
+            {
+                "quotes": [
+                    pick("t1", "r_trade", 80),
+                    pick("t2", "r_care", 80),  # fine
+                    pick("t3", "r_care", 80),  # wrong: r_care is not a candidate of t3
+                ]
+            }
+        )
+
+
+def test_quote_filed_under_the_wrong_theme_is_rejected_and_replaced():
+    from pulse.compose.quotes import select_quotes_with_llm
+
+    trade = "Stop loss orders get rejected during market open and charts lag badly every day."
+    care = "Customer care never replies to my complaints and the support bot keeps looping."
+    crash = "The app crashes on launch after the update and biometric login keeps failing."
+    candidates = {
+        "t1": [_quote_candidate("r_trade", "t1", trade)],
+        "t2": [_quote_candidate("r_care", "t2", care)],
+        "t3": [_quote_candidate("r_crash", "t3", crash)],
+    }
+    quotes = select_quotes_with_llm(make_test_themes(), candidates, _MislabellingLLM())
+
+    by_theme = {q.theme_id: q for q in quotes}
+    assert set(by_theme) == {"t1", "t2", "t3"}
+    assert by_theme["t3"].rid == "r_crash"  # fell back to a t3 candidate, not the care review
+    assert len({q.rid for q in quotes}) == 3  # no review quoted twice
+
+
+def test_theme_centroid_ranks_on_topic_candidates_first():
+    on_topic = make_test_review(
+        rid="r_on",
+        rating=3,
+        helpful_votes=0,
+        clean_text="Stop loss order got rejected during market open and the chart lagged badly.",
+    )
+    off_topic = make_test_review(
+        rid="r_off",
+        rating=3,
+        helpful_votes=0,
+        clean_text="Please add a portfolio return value column like Moneycontrol has, thanks.",
+    )
+    embeddings = {"r_on": [1.0, 0.0], "r_off": [0.0, 1.0]}
+    ranked = retrieve_quote_candidates(
+        theme_id="t1",
+        reviews=[off_topic, on_topic],
+        theme_centroid=[1.0, 0.0],  # the trading theme points the same way as r_on
+        review_embeddings=embeddings,
+        target_count=2,
+    )
+    assert [c.rid for c in ranked] == ["r_on", "r_off"]
+
+
+# --- The word limit is guaranteed even when the LLM's shortening does not help ---
+
+
+def test_deterministic_shorten_cuts_at_a_clause_not_mid_phrase():
+    from pulse.compose.shorten import deterministic_shorten
+
+    text = "Users report slow order execution during market open, and charts that freeze often"
+    out = deterministic_shorten(text, max_words=9)
+    assert len(out.split()) <= 9 and out.endswith(".")
+    assert not out.rstrip(".").endswith(("and", "that", "with"))
+
+
+def test_word_limit_is_enforced_even_when_llm_shortening_does_nothing(tmp_path: Path, monkeypatch):
+    import pulse.compose.pipeline as pipeline_mod
+
+    store, week = _setup_pipeline_store(tmp_path)
+
+    def lazy_shorten(top_themes, actions, current_word_count, max_words, llm_client):
+        return top_themes, actions  # the LLM "shortened" nothing
+
+    monkeypatch.setattr(pipeline_mod, "run_shorten_pass", lazy_shorten)
+    config = AppConfig()
+    config.compose.max_words = 215
+    config.compose.target_words = 200
+    baseline, _ = run_compose_pipeline(
+        week=week, config=AppConfig(), run_store=store, llm_client=MockLLMClient(), dry_run=True
+    )
+    assert baseline.word_count > 215  # the unclamped pulse really is over the limit
+
+    pulse, report = run_compose_pipeline(
+        week=week, config=config, run_store=store, llm_client=MockLLMClient(), dry_run=True
+    )
+    assert report.passed, report.hard_failures
+    assert pulse.word_count <= 215
+    assert [q.text for q in pulse.quotes] == [q.text for q in baseline.quotes]  # quotes untouched

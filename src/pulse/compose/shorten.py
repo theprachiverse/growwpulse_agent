@@ -60,11 +60,45 @@ def deterministic_shorten(text: str, max_words: int) -> str:
     if sentences and len(sentences[0].split()) <= max_words:
         return sentences[0].strip()
 
-    # Otherwise slice words and terminate with period
-    sliced = " ".join(words[:max_words]).rstrip(",;:-")
+    # Otherwise cut at the last clause boundary in the second half of the allowance, else slice
+    head = " ".join(words[:max_words])
+    cut = max(head.rfind(", "), head.rfind("; "))
+    if cut >= len(head) // 2:
+        head = head[:cut]
+    sliced = head.rstrip(",;:- ")
+    sliced = re.sub(r"\s+(and|or|but|with|to|of|for|in|on|the|a)$", "", sliced, flags=re.I)
     if not sliced.endswith("."):
         sliced += "."
     return sliced
+
+
+# Last-resort limits (definition words, rationale words), tried in order until the pulse fits.
+# Quotes, titles and the stats lines are fixed, so only definitions and rationales can give.
+CLAMP_STAGES: tuple[tuple[int, int], ...] = ((12, 18), (6, 12), (0, 10))
+
+
+def clamp_fields(
+    top_themes: list[Theme],
+    actions: list[ActionIdea],
+    definition_words: int,
+    rationale_words: int,
+) -> tuple[list[Theme], list[ActionIdea]]:
+    """Hard-limit theme definitions (0 = drop them) and action rationales; quotes are untouched."""
+    themes = [
+        t.model_copy(
+            update={
+                "definition": deterministic_shorten(t.definition, definition_words)
+                if definition_words
+                else ""
+            }
+        )
+        for t in top_themes
+    ]
+    acts = [
+        a.model_copy(update={"rationale": deterministic_shorten(a.rationale, rationale_words)})
+        for a in actions
+    ]
+    return themes, acts
 
 
 def run_shorten_pass(

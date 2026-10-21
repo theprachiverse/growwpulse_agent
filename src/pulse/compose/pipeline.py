@@ -15,10 +15,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from pulse.compose.actions import generate_action_ideas
 from pulse.compose.quotes import retrieve_quote_candidates, select_quotes_with_llm
 from pulse.compose.render import render_pulse
-from pulse.compose.shorten import run_shorten_pass
+from pulse.compose.shorten import CLAMP_STAGES, clamp_fields, run_shorten_pass
 from pulse.config import AppConfig
 from pulse.guardrails.validators import ValidationReport, validate_pulse
 from pulse.models import CleanReview, Pulse, Theme
@@ -31,6 +33,15 @@ if TYPE_CHECKING:
     from pulse.llm.client import LLMClient
 
 logger = get_logger("pulse.compose.pipeline")
+
+
+def _hard_unrepairable(report: ValidationReport) -> list[str]:
+    """Hard checks that shortening cannot fix (the word limit is repairable; soft checks never block)."""
+    return [
+        name
+        for name, ok in report.checks.items()
+        if not ok and name not in {"word_limit", "source_coverage", "tone"}
+    ]
 
 
 def run_compose_pipeline(
@@ -103,10 +114,16 @@ def run_compose_pipeline(
     candidates_by_theme = {}
     for t in top_themes:
         theme_revs = reviews_by_theme.get(t.theme_id, [])
+        # Mean embedding of the theme's reviews: lets candidates be ranked by how on-topic they
+        # are, not only by upvotes and star rating.
+        vecs = [review_embeddings[r.rid] for r in theme_revs if r.rid in review_embeddings]
+        theme_centroid = (
+            np.mean(np.array(vecs, dtype=np.float32), axis=0).tolist() if vecs else None
+        )
         cands = retrieve_quote_candidates(
             theme_id=t.theme_id,
             reviews=theme_revs,
-            theme_centroid=None,
+            theme_centroid=theme_centroid,
             review_embeddings=review_embeddings,
             min_words=config.compose.quote_words[0],
             max_words=config.compose.quote_words[1],
@@ -196,14 +213,7 @@ def run_compose_pipeline(
     # result on re-validation, so fail immediately instead of looping.
     repair_attempt = 0
     while not report.passed and repair_attempt < max_repair_attempts:
-        unrepairable = [
-            name for name, ok in report.checks.items() if not ok and name != "word_limit"
-        ]
-        hard_unrepairable = [
-            name
-            for name in unrepairable
-            if name not in {"source_coverage", "tone"}  # soft checks never block
-        ]
+        hard_unrepairable = _hard_unrepairable(report)
         if hard_unrepairable:
             logger.error(
                 "guardrails_failed_unrepairable_checks",
@@ -225,6 +235,40 @@ def run_compose_pipeline(
             all_themes=themes,
             config=config,
         )
+
+    # Last resort: the LLM shorten passes can leave the body over the cap, because quotes are locked
+    # and titles/stats are fixed. If the word limit is the only hard failure, clamp definitions and
+    # rationales harder in stages until the pulse fits.
+    if not report.passed and not _hard_unrepairable(report):
+        for definition_words, rationale_words in CLAMP_STAGES:
+            clamped_themes, clamped_actions = clamp_fields(
+                pulse.top_themes, pulse.actions, definition_words, rationale_words
+            )
+            _md, pulse = render_pulse(
+                week=week,
+                window_start=window_start,
+                window_end=window_end,
+                window_weeks=window_weeks,
+                reviews=clean_reviews,
+                top_themes=clamped_themes,
+                quotes=pulse.quotes,  # strictly locked!
+                actions=clamped_actions,
+                low_volume_threshold=min_reviews,
+            )
+            logger.warning(
+                "guardrails_word_limit_clamped",
+                definition_words=definition_words,
+                rationale_words=rationale_words,
+                word_count=pulse.word_count,
+            )
+            report = validate_pulse(
+                pulse=pulse,
+                all_clean_reviews=clean_reviews,
+                all_themes=themes,
+                config=config,
+            )
+            if report.passed:
+                break
 
     # 11. Persistence
     if report.passed:

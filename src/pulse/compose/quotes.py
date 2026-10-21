@@ -288,12 +288,24 @@ def select_quotes_with_llm(
             system_prompt=system_prompt,
         )
 
+        theme_rids = {
+            t.theme_id: {c.rid for c in candidates_by_theme.get(t.theme_id, [])} for t in top_themes
+        }
+        taken_rids: set[str] = set()
         for item in response.quotes:
             t_id = item.theme_id
             span_sel = item.selected_span
             candidate = cand_map.get(span_sel.rid)
             if not candidate:
                 continue
+            # The pick must be a candidate of the theme it is filed under (the model sometimes
+            # files a support quote under a trading theme), once per theme, and never reused.
+            if span_sel.rid not in theme_rids.get(t_id, set()) or span_sel.rid in taken_rids:
+                logger.warning("quote_pick_rejected_wrong_theme", theme_id=t_id, rid=span_sel.rid)
+                continue
+            if any(q.theme_id == t_id for q in selected_quotes):
+                continue
+            taken_rids.add(span_sel.rid)
 
             extracted_text = extract_verbatim_span(
                 candidate=candidate,
@@ -327,7 +339,8 @@ def select_quotes_with_llm(
         if t.theme_id not in existing_theme_ids:
             cands = candidates_by_theme.get(t.theme_id, [])
             if cands:
-                top_c = cands[0]
+                used = {q.rid for q in selected_quotes}
+                top_c = next((c for c in cands if c.rid not in used), cands[0])
                 month_str = top_c.date.strftime("%b %Y")
                 selected_quotes.append(
                     Quote(
