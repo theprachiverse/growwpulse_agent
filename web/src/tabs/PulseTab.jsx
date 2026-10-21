@@ -116,16 +116,25 @@ export default function PulseTab({ data, onGenerate, onSwitchWeek, onSwitchTab }
   const published = docDone || emailDone;
   const docSha = pub?.doc_append?.content_sha256 ? `${pub.doc_append.content_sha256.slice(0, 7)}…` : null;
 
-  // The guardrails the problem statement requires (§4.3, §6, §8).
-  const CHECKS = [
+  // Every guardrail the pipeline runs (src/pulse/guardrails/validators.py). The first six are what
+  // the problem statement requires (§4.3, §6, §8); the rest tighten privacy, attribution and tone.
+  const ALL_CHECKS = [
     ["verbatim", "Verbatim Quotes", "Every quote is copied word for word from a real review"],
     ["pii", "No PII", "No usernames, emails, device IDs or other reviewer identifiers"],
     ["word_limit", "Word Limit", `Note stays within ${maxWords} words`],
     ["theme_count", "Theme Count", "At most 5 themes discovered; top 3 highlighted"],
     ["quote_count", "3 Quotes", "Exactly 3 user quotes in the note"],
     ["action_grounding", "3 Grounded Actions", "Exactly 3 actions, each tied to a theme"],
+    ["no_identifiers", "No Internal IDs", "No review IDs or hash tokens in the published note"],
+    ["source_attribution", "Source Attribution", "Each quote names its store: Play Store or App Store"],
+    ["quote_rules", "Quote Rules", "Quotes are 8–40 words and come from 3 different reviews"],
+    ["source_coverage", "Source Coverage", "Both Play Store and App Store reviews are represented"],
+    ["tone", "Professional Tone", "No casual or inflammatory wording in the note"],
   ];
   const checks = eval_report?.checks;
+  // Count what the saved report actually ran, so an older report is never marked down for a
+  // guardrail that did not exist yet.
+  const CHECKS = checks ? ALL_CHECKS.filter(([k]) => k in checks) : ALL_CHECKS;
   const checksPassed = checks ? CHECKS.filter(([k]) => checks[k]).length : 0;
   const allPassed = !!checks && checksPassed === CHECKS.length;
 
