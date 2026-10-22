@@ -1135,3 +1135,31 @@ def test_persist_false_writes_nothing_and_default_still_saves(tmp_path: Path):
         week=week, config=AppConfig(), run_store=store, llm_client=MockLLMClient(), dry_run=True
     )
     assert (run_dir / "pulse.json").exists() and (run_dir / "pulse.md").exists()
+
+
+# --- Running out of LLM quota during shortening must not abort the run ---
+
+
+class _OutOfQuotaOnShorten(MockLLMClient):
+    """Quote/action calls fall back as usual; the shorten call finds the quota gone."""
+
+    def complete_json(self, prompt, schema, temperature=0.0, **kwargs):
+        from pulse.compose.models import ShortenResponse
+        from pulse.llm.budget import DailyQuotaExceededError
+
+        if schema is ShortenResponse:
+            raise DailyQuotaExceededError("Groq's daily token limit is used up")
+        return super().complete_json(prompt, schema, temperature, **kwargs)
+
+
+def test_quota_gone_during_shortening_still_finishes_under_the_limit(tmp_path: Path):
+    store, week = _setup_pipeline_store(tmp_path)
+    config = AppConfig()
+    config.compose.max_words = 215
+    config.compose.target_words = 200
+    pulse, report = run_compose_pipeline(
+        week=week, config=config, run_store=store, llm_client=_OutOfQuotaOnShorten(), dry_run=True
+    )
+    assert report.passed, report.hard_failures
+    assert pulse.word_count <= 215
+    assert (store.run_dir(week) / "pulse.json").exists()  # saved, not paused

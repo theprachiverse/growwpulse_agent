@@ -174,7 +174,11 @@ def start_job(
             raise BusyError("A run is already in progress")
         _job.clear()
         _job.update(
-            state="running", week=week, dry_run=dry_run, started_at=datetime.now(UTC).isoformat()
+            state="running",
+            week=week,
+            dry_run=dry_run,
+            from_step=kwargs.get("from_step"),
+            started_at=datetime.now(UTC).isoformat(),
         )
     kwargs.update(week=week, dry_run=dry_run, check_health=not (dry_run or skip_health_check))
     threading.Thread(target=_run_job, args=(kwargs,), daemon=True).start()

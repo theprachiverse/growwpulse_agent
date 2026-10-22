@@ -154,8 +154,9 @@ def run_shorten_pass(
         for a_item in response.actions:
             if a_item.shortened_rationale.strip():
                 shortened_actions[a_item.theme_id] = a_item.shortened_rationale.strip()
-    except BudgetExceededError:
-        raise
+    except BudgetExceededError as exc:
+        # Shortening has a deterministic fallback, so an exhausted quota must not abort the run.
+        logger.warning("llm_shorten_pass_out_of_budget_using_algorithmic_fallback", error=str(exc))
     except Exception as exc:
         logger.warning("llm_shorten_pass_failed_using_algorithmic_fallback", error=str(exc))
 

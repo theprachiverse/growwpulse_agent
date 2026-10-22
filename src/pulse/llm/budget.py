@@ -79,7 +79,8 @@ def _parse_time(raw: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def _fmt_wait(seconds: float) -> str:
+def format_wait(seconds: float) -> str:
+    """'5h 20m' / '12m' for a wait given in seconds."""
     minutes = max(1, round(seconds / 60))
     hours, mins = divmod(minutes, 60)
     return f"{hours}h {mins}m" if hours else f"{mins}m"
@@ -240,7 +241,7 @@ class LLMBudget:
             raise BudgetExceededError(
                 f"Not enough tokens left: ~{remaining:,} remaining, a run needs ~{estimate:,} "
                 f"(allowance {self.token_allowance:,}). Tokens refill gradually; enough will be "
-                f"back in about {_fmt_wait(wait)}."
+                f"back in about {format_wait(wait)}."
             )
 
         if state["current_run_tokens"] > 0:

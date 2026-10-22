@@ -311,3 +311,23 @@ def test_old_ledger_that_learned_a_200k_run_does_not_block_a_cheaper_run(tmp_pat
     assert st["estimated_run_tokens"] == 30_000  # not the stale 180k
     assert st["tokens_remaining"] >= 30_000
     b.begin_run()  # was: "Not enough daily tokens left: ~-22,532 remaining ..."
+
+
+@respx.mock
+def test_quota_error_message_is_plain_english(tmp_path: Path) -> None:
+    b = make(tmp_path, Clock())
+    client = GroqLocalEmbedClient(
+        api_key="k", chat_model="openai/gpt-oss-120b", base_url="https://groq.test/v1", budget=b
+    )
+    respx.post("https://groq.test/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            429,
+            text='{"error":{"message":"Rate limit reached ... on tokens per day (TPD): '
+            'Limit 200000, Used 199958. Please try again in 37m25.1s."}}',
+        )
+    )
+    with pytest.raises(DailyQuotaExceededError) as caught:
+        client.complete_json("hi", ClassificationItem)
+    msg = str(caught.value)
+    assert "openai/gpt-oss-120b" in msg and "about 37m" in msg
+    assert "{" not in msg and "org_" not in msg  # no raw JSON or account ids shown to the user

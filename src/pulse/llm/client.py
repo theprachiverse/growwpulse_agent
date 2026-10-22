@@ -25,6 +25,7 @@ from pulse.llm.budget import (
     DailyQuotaExceededError,
     LLMBudget,
     budget_from_settings,
+    format_wait,
     parse_retry_seconds,
 )
 from pulse.llm.embedder import DEFAULT_COMPONENTS, TfidfSvdEmbedder
@@ -231,8 +232,11 @@ class GroqLocalEmbedClient:
                 if resp.status_code == 429 and "per day" in resp.text:
                     if self.budget is not None:
                         self.budget.mark_exhausted(parse_retry_seconds(resp.text), resp.text)
+                    hint = parse_retry_seconds(resp.text)
+                    when = f" Try again in about {format_wait(hint)}." if hint else ""
                     raise DailyQuotaExceededError(
-                        f"Groq daily token quota exhausted: {resp.text[:160]}"
+                        f"Groq's daily token limit for {self.chat_model} is used up; tokens "
+                        f"refill gradually.{when}"
                     )
 
                 # JSON mode answers 400 when the model's reply is not valid JSON (or was cut off).
