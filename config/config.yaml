@@ -67,11 +67,12 @@ llm:
   # https://console.groq.com/docs/rate-limits and adjust. Set `model: null` to use model_chat.
   classify:
     model: openai/gpt-oss-20b   # must appear in GET https://api.groq.com/openai/v1/models for your key
+    strategy: hybrid            # hybrid (LLM sample + ML classifier) | ml_only (100% local ML centroid classifier)
     daily_token_limit: 200000
     tokens_per_minute: 8000
     safety_margin: 0.9
-    max_reviews_per_run: 500    # fresh reviews sent to the LLM per run; others use centroid fallback (0 = no cap)
-    max_residual_reviews: 250   # same cap for the residual pass over the 'other' bucket (0 = no cap)
+    max_reviews_per_run: 200    # fresh reviews sent to the LLM per run; ML labels all others (0 = all to LLM)
+    max_residual_reviews: 100   # same cap for the residual pass over the 'other' bucket (0 = all to LLM)
   # Budget below covers only gpt-oss-120b: theme discovery, residual naming, compose (~20-30k/run).
   # Remembered across runs in <data_dir>/llm_budget.json. Groq refills tokens continuously (a rolling
   # 24h bucket, ~8.3k/hour per 200k/day), so the ledger does too: there is no midnight reset.

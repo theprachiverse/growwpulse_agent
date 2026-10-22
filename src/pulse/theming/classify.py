@@ -178,6 +178,7 @@ def classify_reviews(
     request_delay_s: float = 0.2,
     cache_dir: Path | str | None = None,
     max_llm_reviews: int = 0,
+    strategy: str = "hybrid",
 ) -> list[ReviewAssignment]:
     """Classify all cleaned reviews into themes with 1-to-1 guarantee and centroid fallback.
 
@@ -191,6 +192,8 @@ def classify_reviews(
         request_delay_s: Politeness delay between batches to respect rate limits.
         cache_dir: If set, LLM answers are cached here and reused by later runs (see cache.py);
             only reviews without a cached answer are sent to the LLM.
+        max_llm_reviews: Cap on fresh reviews sent to LLM per run (0 = no cap).
+        strategy: 'hybrid' (sample to LLM + ML model) or 'ml_only' (100% local centroids).
 
     Returns:
         list[ReviewAssignment]: Fully classified review assignments in input order.
@@ -200,6 +203,26 @@ def classify_reviews(
 
     # Ensure theme centroids are available for fallback
     centroids = theme_centroids or compute_theme_centroids(themes, llm_client)
+    rid_to_embedding = {r.rid: emb for r, emb in zip(reviews, review_embeddings, strict=False)}
+
+    # Pure ML mode: zero token cost, classify all reviews via centroid similarity
+    if strategy == "ml_only":
+        logger.info("classification_strategy_ml_only_bypassing_llm", total_reviews=len(reviews))
+        assignments: list[ReviewAssignment] = []
+        for r in reviews:
+            emb = rid_to_embedding.get(r.rid, [])
+            theme_id, conf = classify_by_centroid(emb, centroids)
+            assignments.append(
+                ReviewAssignment(
+                    rid=r.rid,
+                    theme_id=theme_id,
+                    confidence=conf,
+                    source=r.source,
+                    rating=r.rating,
+                    helpful_votes=r.helpful_votes,
+                )
+            )
+        return assignments
 
     system_prompt = load_prompt_template(
         "classify.md",
@@ -243,10 +266,20 @@ def classify_reviews(
         batch = todo[b_idx * batch_size : (b_idx + 1) * batch_size]
         try:
             fresh = classify_batch_with_llm(batch, themes, llm_client, system_prompt)
-        except (BudgetExceededError, LLMConfigError):
+        except LLMConfigError:
             if cache is not None:
-                cache.save()  # keep the progress made before the budget ran out
+                cache.save()  # keep the progress made before config error
             raise
+        except BudgetExceededError as exc:
+            if cache is not None:
+                cache.save()  # keep progress made before running out of budget
+            logger.warning(
+                "batch_classification_budget_exceeded_falling_back_to_ml",
+                completed_batches=b_idx,
+                labels_collected=len(item_map),
+                error=str(exc),
+            )
+            break
         except Exception as exc:
             fresh = {}
             logger.warning(
@@ -265,7 +298,6 @@ def classify_reviews(
             time.sleep(request_delay_s)
 
     # Assemble assignments with completeness and confidence checks
-    rid_to_embedding = {r.rid: emb for r, emb in zip(reviews, review_embeddings, strict=False)}
     trusted = [
         r.rid
         for r in reviews

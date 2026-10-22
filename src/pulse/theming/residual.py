@@ -120,8 +120,9 @@ def residual_pass(
 
     try:
         new_theme = discover_residual_theme(others, themes, llm_client)
-    except BudgetExceededError:
-        raise
+    except BudgetExceededError as exc:
+        logger.warning("residual_discovery_skipped_budget_exceeded", error=str(exc))
+        return themes, assignments
     except Exception as exc:
         logger.warning("residual_discovery_failed", error=str(exc))
         return themes, assignments

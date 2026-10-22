@@ -133,6 +133,7 @@ def run_theming_pipeline(
         batch_size=batch_size,
         cache_dir=cache_dir,
         max_llm_reviews=config.llm.classify.max_reviews_per_run,
+        strategy=config.llm.classify.strategy,
     )
 
     # 6b. Residual pass: recover a missed product domain from a large 'other' bucket

@@ -210,14 +210,18 @@ class ClassifyLLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: str | None = None  # None = classify with `model_chat`
+    strategy: Literal["hybrid", "ml_only"] = Field(
+        default="hybrid",
+        description="Classification strategy: 'hybrid' (sample to LLM + ML model) or 'ml_only' (100% local centroids)",
+    )
     daily_token_limit: int = Field(default=500_000, gt=0)
     tokens_per_minute: int = Field(default=6_000, ge=0)
     safety_margin: float = Field(default=0.9, gt=0.0, le=1.0)
     max_reviews_per_run: int = Field(
-        default=0, ge=0, description="Cap on fresh reviews sent to the LLM per run (0 = no cap)"
+        default=200, ge=0, description="Cap on fresh reviews sent to the LLM per run (0 = no cap)"
     )
     max_residual_reviews: int = Field(
-        default=0, ge=0, description="Same cap for the residual pass over 'other' (0 = no cap)"
+        default=100, ge=0, description="Same cap for the residual pass over 'other' (0 = no cap)"
     )
 
 

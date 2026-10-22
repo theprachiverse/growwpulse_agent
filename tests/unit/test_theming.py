@@ -641,3 +641,85 @@ def test_classify_caps_llm_reviews_and_falls_back_to_centroids() -> None:
     )
     assert len(out) == 100  # every review still gets exactly one assignment
     assert CountingLLM.seen == 40  # only the capped sample reached the LLM
+
+
+def test_classify_strategy_ml_only_bypasses_llm() -> None:
+    from datetime import date
+    from pulse.models import CleanReview
+    from pulse.theming.classify import classify_reviews
+    from pulse.theming.models import ThemeSpec
+
+    reviews = [
+        CleanReview(
+            rid=f"rid_{i:04d}",
+            source="play_store",
+            rating=3,
+            clean_text=f"review {i}",
+            date=date(2026, 10, 10),
+            iso_week="2026-W41",
+        )
+        for i in range(20)
+    ]
+    embs = [[1.0, 0.0] for _ in reviews]
+    themes = [ThemeSpec(theme_id="t1", name="Trading", definition="Trading issues.")]
+
+    class ZeroCallLLM:
+        def complete_json(self, *_, **__):
+            raise AssertionError("LLM should not be called in ml_only mode")
+
+        def embed(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+    out = classify_reviews(
+        reviews, embs, themes, ZeroCallLLM(), strategy="ml_only"
+    )
+    assert len(out) == 20
+    assert all(a.theme_id == "t1" for a in out)
+
+
+def test_classify_budget_exceeded_falls_back_to_ml_model() -> None:
+    from datetime import date
+    from pulse.llm.budget import BudgetExceededError
+    from pulse.models import CleanReview
+    from pulse.theming.classify import classify_reviews
+    from pulse.theming.models import BatchClassificationResult, ThemeSpec
+
+    reviews = [
+        CleanReview(
+            rid=f"rid_{i:04d}",
+            source="play_store",
+            rating=3,
+            clean_text=f"review {i}",
+            date=date(2026, 10, 10),
+            iso_week="2026-W41",
+        )
+        for i in range(50)
+    ]
+    embs = [[1.0, 0.0] for _ in reviews]
+    themes = [ThemeSpec(theme_id="t1", name="Trading", definition="Trading issues.")]
+
+    class FailingBudgetLLM:
+        calls = 0
+
+        def complete_json(self, prompt, schema, **_):
+            self.calls += 1
+            if self.calls == 1:
+                # First batch succeeds
+                n = 25
+                items = [{"rid": str(i + 1), "theme_id": "t1"} for i in range(n)]
+                return BatchClassificationResult.model_validate({"items": items})
+            # Second batch hits budget limit
+            raise BudgetExceededError("Daily token limit reached.")
+
+        def embed(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+    llm = FailingBudgetLLM()
+    # Batch size 25 means 2 batches for 50 reviews.
+    # Second batch will fail with BudgetExceededError, triggering graceful ML fallback.
+    out = classify_reviews(
+        reviews, embs, themes, llm, batch_size=25, request_delay_s=0.0
+    )
+    assert len(out) == 50
+    assert all(a.theme_id in ("t1", "other") for a in out)
+    assert llm.calls == 2
