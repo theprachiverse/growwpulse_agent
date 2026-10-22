@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import Icon from "../components/Icon.jsx";
+import { friendlyMessage } from "../friendly.js";
 
 const STATUS_CHIP = { done: "ok", failed: "bad", unknown: "warn", pending: "" };
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : null);
@@ -108,7 +109,7 @@ export default function PublishTab({ week, data }) {
         </p>
       </div>
 
-      {error && <div className="banner bad" style={{ whiteSpace: "pre-wrap" }}>{error}</div>}
+      {error && <div className="banner bad" style={{ whiteSpace: "pre-wrap" }}>{friendlyMessage(error)}</div>}
       {notice && <div className="banner info">{notice}</div>}
       {!hasPulse && (
         <div className="banner warn">

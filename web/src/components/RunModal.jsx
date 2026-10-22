@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api.js";
+import { friendlyMessage } from "../friendly.js";
 
 const STEPS = ["", "ingest", "preprocess", "theming", "compose", "publish"];
 
@@ -156,7 +157,7 @@ export default function RunModal({
           According to <code>problemStatement.md</code>, the pipeline fetches public reviews from Google Play & Apple App Store for a rolling window of 8–12 weeks, scrubs PII, clusters into ≤5 themes, and generates a one-page executive pulse.
         </div>
 
-        {err && <div className="banner bad" style={{ marginBottom: 12 }}>{err}</div>}
+        {err && <div className="banner bad" style={{ marginBottom: 12 }}>{friendlyMessage(err)}</div>}
 
         {blocked && (
           <div className="banner bad" style={{ marginBottom: 12 }}>

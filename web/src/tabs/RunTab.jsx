@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import RunModal from "../components/RunModal.jsx";
+import { friendlyMessage, runDurationHint } from "../friendly.js";
 
 export default function RunTab({ week, weeks = [], data, health, onDone, onOpenModal }) {
   const [job, setJob] = useState({ state: "idle" });
@@ -47,8 +48,9 @@ export default function RunTab({ week, weeks = [], data, health, onDone, onOpenM
         </div>
         {running && (
           <div className="banner info" style={{ marginTop: 12 }}>
-            Running {job.week} ({job.dry_run ? "dry run" : "live publish"}) since {new Date(job.started_at).toLocaleTimeString()}.
-            Theming makes about 30 LLM calls and can take 10+ minutes.
+            Running {job.week === "auto" ? "the latest week" : job.week}{" "}
+            ({job.dry_run ? "test run, nothing is published" : "will publish"}) since{" "}
+            {new Date(job.started_at).toLocaleTimeString()}. {runDurationHint(job)}
           </div>
         )}
         {job.state === "done" && (
@@ -56,10 +58,12 @@ export default function RunTab({ week, weeks = [], data, health, onDone, onOpenM
         )}
         {job.state === "paused" && (
           <div className="banner warn" style={{ marginTop: 12 }}>
-            Paused by the token limit, not a failure: {job.error} Classified reviews are cached, so the next run resumes where this one stopped.
+            <strong>Paused, not failed.</strong> {friendlyMessage(job.error)} Nothing was lost: progress so far is saved.
           </div>
         )}
-        {job.state === "failed" &&<div className="banner bad" style={{ marginTop: 12 }}>Last run failed: {job.error}</div>}
+        {job.state === "failed" && (
+          <div className="banner bad" style={{ marginTop: 12 }}>Last run failed: {friendlyMessage(job.error)}</div>
+        )}
       </div>
 
       {!data ? (
