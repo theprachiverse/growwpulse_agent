@@ -22,7 +22,7 @@ Groq's free tier gives about 200k tokens/day per model (8k tokens/minute). The l
 | Theme discovery, residual naming, compose | `openai/gpt-oss-120b` | `data/llm_budget.json` | ~20-30k |
 | Per-review classification (sample of 500 + 250 residual) | `openai/gpt-oss-20b` | `data/llm_budget_classify.json` | ~55-60k |
 
-- Only a capped sample of fresh reviews goes to the LLM (`llm.classify.max_reviews_per_run`, `max_residual_reviews`). The rest are assigned to the nearest theme by TF-IDF centroid, which costs no tokens. Every review still gets one theme.
+- Only a capped sample of fresh reviews goes to the LLM (`llm.classify.max_reviews_per_run`, `max_residual_reviews`). The rest are labelled by a small scikit-learn model trained on the LLM's own answers (cached ones included), which costs no tokens. With too few LLM labels to learn from, they fall back to the nearest theme by TF-IDF centroid. Every review still gets one theme.
 - About 3 cold runs fit per day (`llm.budget.max_runs_per_day`). Re-running the same week reuses cached labels.
 - A run takes roughly 15-20 minutes because calls are paced under the tokens-per-minute limit.
 - If Groq answers 401/403/404 (for example a model name your key cannot use), the run stops at once. A bad-JSON reply (400 `json_validate_failed`) only sends that batch to the centroid fallback. List the models your key can use with `GET https://api.groq.com/openai/v1/models`.

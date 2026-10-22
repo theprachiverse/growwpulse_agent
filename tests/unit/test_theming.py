@@ -4,6 +4,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+import numpy as np
+
 from pulse.config import AppConfig
 from pulse.llm.client import MockLLMClient
 from pulse.models import CleanReview, Source, Theme
@@ -11,6 +13,7 @@ from pulse.run_store import RunStore
 from pulse.theming.classify import (
     classify_by_centroid,
     classify_reviews,
+    fit_label_model,
 )
 from pulse.theming.cluster import cluster_and_sample, truncate_preview
 from pulse.theming.discover import discover_themes, merge_excess_themes
@@ -192,6 +195,21 @@ def test_classify_by_centroid_confidence_stays_in_unit_range_for_negative_simila
     theme_id, conf = classify_by_centroid([-1.0, -0.006], centroids)
     assert theme_id == "other"
     assert 0.0 <= conf <= 1.0
+
+
+def test_fit_label_model_learns_from_llm_labels():
+    rng = np.random.default_rng(0)
+    a = rng.normal([1.0, 0.0], 0.1, size=(40, 2))
+    b = rng.normal([0.0, 1.0], 0.1, size=(40, 2))
+    model = fit_label_model([*a.tolist(), *b.tolist()], ["t1"] * 40 + ["other"] * 40)
+    assert model is not None
+    assert list(model.predict([[0.9, 0.0], [0.0, 0.9]])) == ["t1", "other"]
+
+
+def test_fit_label_model_declines_when_too_little_to_learn_from():
+    assert fit_label_model([[1.0, 0.0]] * 10, ["t1"] * 5 + ["other"] * 5) is None  # too few
+    assert fit_label_model([[1.0, 0.0]] * 80, ["t1"] * 80) is None  # one class
+    assert fit_label_model([[]] * 80, ["t1"] * 40 + ["other"] * 40) is None  # empty vectors
 
 
 def test_classify_reviews_with_completeness_and_fallback():

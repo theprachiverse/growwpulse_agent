@@ -1,4 +1,4 @@
-"""Task 3.3: Batched Classification with Centroid Fallback.
+"""Task 3.3: Batched Classification with a trained-model (then centroid) fallback.
 
 Classifies cleaned reviews into discovered themes or 'other' using batched LLM calls
 with strict 1-to-1 completeness validation, rate-limiting, and dense vector centroid fallback.
@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+from sklearn.linear_model import LogisticRegression
 
 from pulse.llm.budget import BudgetExceededError
 from pulse.llm.client import LLMConfigError
@@ -87,6 +88,26 @@ def format_themes_definition(themes: list[ThemeSpec]) -> str:
         exc = f" (Excludes: {', '.join(t.exclusion_criteria)})" if t.exclusion_criteria else ""
         lines.append(f"- `{t.theme_id}`: **{t.name}** — {t.definition}{inc}{exc}")
     return "\n".join(lines)
+
+
+# Fewest LLM-labelled reviews worth training a fallback model on.
+MIN_TRAIN_LABELS = 60
+MIN_LLM_CONFIDENCE = 0.5
+
+
+def fit_label_model(embeddings: list[list[float]], labels: list[str]) -> LogisticRegression | None:
+    """Train on the LLM's own answers so unsampled reviews get the same kind of label.
+
+    Returns None when there is too little to learn from (few labels, one class, empty vectors);
+    the caller then uses the centroid fallback.
+    """
+    if len(labels) < MIN_TRAIN_LABELS or len(set(labels)) < 2:
+        return None
+    if any(len(e) == 0 for e in embeddings):
+        return None
+    model = LogisticRegression(C=1.0, max_iter=2000, class_weight="balanced")
+    model.fit(np.asarray(embeddings, dtype=np.float64), labels)
+    return model
 
 
 def _prompt_text(review: CleanReview) -> str:
@@ -245,14 +266,29 @@ def classify_reviews(
 
     # Assemble assignments with completeness and confidence checks
     rid_to_embedding = {r.rid: emb for r, emb in zip(reviews, review_embeddings, strict=False)}
+    trusted = [
+        r.rid
+        for r in reviews
+        if r.rid in item_map and item_map[r.rid].confidence >= MIN_LLM_CONFIDENCE
+    ]
+    label_model = fit_label_model(
+        [rid_to_embedding[rid] for rid in trusted if rid in rid_to_embedding],
+        [item_map[rid].theme_id for rid in trusted if rid in rid_to_embedding],
+    )
+    logger.info("label_model", trained=label_model is not None, labelled=len(trusted))
     assignments: list[ReviewAssignment] = []
     for r in reviews:
         emb = rid_to_embedding.get(r.rid, [])
         item = item_map.get(r.rid)
 
-        if item is None or item.confidence < 0.5:
-            # Centroid fallback if missing or low confidence
-            theme_id, conf = classify_by_centroid(emb, centroids)
+        if item is None or item.confidence < MIN_LLM_CONFIDENCE:
+            # No usable LLM answer: use the model trained on the LLM's answers, else centroids
+            if label_model is not None and emb:
+                probs = label_model.predict_proba(np.asarray([emb], dtype=np.float64))[0]
+                best = int(np.argmax(probs))
+                theme_id, conf = str(label_model.classes_[best]), round(float(probs[best]), 3)
+            else:
+                theme_id, conf = classify_by_centroid(emb, centroids)
         else:
             theme_id = item.theme_id
             conf = item.confidence
